@@ -78,7 +78,6 @@ func ValidateTransaction(ctx sdk.Ctx, k Keeper, stdTx types.StdTx, params Params
 		return types.ErrDuplicateTx(ModuleName, hex.EncodeToString(txHash))
 	}
 	fmt.Println("CHAIN ID!!! : ", ctx.ChainID())
-	fmt.Println("STDTX: ", stdTx.String())
 	fmt.Println("HEX SIGNATURE BYTES RECEIVED : ", hex.EncodeToString(stdTx.Signature.Signature))
 	// get the sign bytes from the tx
 	signBytes, err := GetSignBytes(ctx.ChainID(), stdTx)
