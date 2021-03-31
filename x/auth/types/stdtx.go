@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/pokt-network/pocket-core/codec"
@@ -43,12 +44,15 @@ func CountSubKeys(pub crypto.PubKey) int {
 
 // StdSignBytes returns the bytes to sign for a transaction.
 func StdSignBytes(chainID string, entropy int64, fee sdk.Coins, msg sdk.Msg, memo string) ([]byte, error) {
+	fmt.Println("!!!!!! CUSTOM LOGGING STARTS!!!!!")
+	fmt.Println("MESSAGE RAW: \n", string(msg.GetSignBytes()))
 	msgsBytes := msg.GetSignBytes()
 	var feeBytes sdk.Raw
 	feeBytes, err := fee.MarshalJSON()
 	if err != nil {
 		return nil, fmt.Errorf("could not marshal fee to json for StdSignBytes function: %v", err.Error())
 	}
+	fmt.Println("FEE JSON: ", string(feeBytes))
 	bz, err := ModuleCdc.MarshalJSON(StdSignDoc{
 		ChainID: chainID,
 		Fee:     feeBytes,
@@ -59,7 +63,9 @@ func StdSignBytes(chainID string, entropy int64, fee sdk.Coins, msg sdk.Msg, mem
 	if err != nil {
 		return nil, fmt.Errorf("could not marshal bytes to json for StdSignDoc function: %v", err.Error())
 	}
-	return sdk.MustSortJSON(bz), nil
+	res := sdk.MustSortJSON(bz)
+	fmt.Println("SORTED JSON HEX SIGN BYTES! : ", hex.EncodeToString(res))
+	return res, nil
 }
 
 // Legacy Amino Code Below

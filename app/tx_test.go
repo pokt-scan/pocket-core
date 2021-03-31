@@ -5,11 +5,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/pokt-network/pocket-core/codec"
+	types2 "github.com/pokt-network/pocket-core/codec/types"
 	"github.com/pokt-network/pocket-core/crypto"
 	"github.com/pokt-network/pocket-core/crypto/keys"
 	sdk "github.com/pokt-network/pocket-core/types"
 	apps "github.com/pokt-network/pocket-core/x/apps"
 	appsTypes "github.com/pokt-network/pocket-core/x/apps/types"
+	"github.com/pokt-network/pocket-core/x/auth"
 	"github.com/pokt-network/pocket-core/x/auth/types"
 	"github.com/pokt-network/pocket-core/x/gov"
 	govTypes "github.com/pokt-network/pocket-core/x/gov/types"
@@ -32,6 +34,66 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+func TestS(t *testing.T) {
+	bz, _ := hex.DecodeString("0a14da0d712e0ad5b37393c022c3333bed46c8667d0a1214b180d9f3f848a1133a7e63f31b09f932a2d3d9041a06313030303030")
+	a := types2.Any{
+		TypeUrl: "/x.nodes.MsgSend",
+		Value:   bz,
+	}
+	cdc := memCodec()
+	z := sdk.ProtoMsg(&nodeTypes.MsgSend{})
+	cdc.ProtoCodec().UnpackAny(&a, &z)
+	fmt.Println(z)
+}
+
+func TestZ(t *testing.T) {
+	bz, _ := hex.DecodeString("0a14da0d712e0ad5b37393c022c3333bed46c8667d0a12146fc92bf55e9d9ddb3f320dafa7ca9b2a8fba59c91a06313030303030")
+	s := nodeTypes.MsgSend{}
+	memCodec().ProtoUnmarshalBinaryBare(bz, &s)
+	fmt.Println(s)
+}
+
+func TestB(t *testing.T) {
+	bz, _ := hex.DecodeString("da010a480a102f782e6e6f6465732e4d736753656e6412340a14da0d712e0ad5b37393c022c3333bed46c8667d0a12146fc92bf55e9d9ddb3f320dafa7ca9b2a8fba59c91a06313030303030120e0a0575706f6b74120531303030301a640a205bdbfdad5ab2f7fdd0b815cc0fee2e263242bcdb8db19db23765c3cc67815e12124049b5567c712541362bc74638ee18e1d28bdfb0247a90f066fdf0e293d4b1d56817256c33fb00a1a53e139765cbc560defd3235f95247048e0001942ad98cfc08220f54686973206973206120746573742128aa91c2cffe8db077")
+	stdTx := types.ProtoStdTx{}
+	err := memCodec().ProtoUnmarshalBinaryLengthPrefixed(bz, &stdTx)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(hex.EncodeToString(stdTx.Msg.Value))
+}
+
+func Test(t *testing.T) {
+	pkBz, _ := hex.DecodeString("49c249b58e8b6d240858c9c52755c1acf01d3f7b7df251e990fbd1879bd386275bdbfdad5ab2f7fdd0b815cc0fee2e263242bcdb8db19db23765c3cc67815e12")
+	pk, _ := crypto.NewPrivateKeyBz(pkBz)
+	addr1, _ := hex.DecodeString("da0d712e0ad5b37393c022c3333bed46c8667d0a")
+	addr2, _ := hex.DecodeString("1fe307493be6804a1bcee853e0536298aa198325")
+	tx := types.StdTx{
+		Msg: nodeTypes.MsgSend{
+			FromAddress: addr1,
+			ToAddress:   addr2,
+			Amount:      sdk.NewInt(100000),
+		},
+		Fee: sdk.Coins{sdk.Coin{Amount: sdk.NewInt(10000), Denom: "upokt"}},
+		Signature: types.StdSignature{
+			PublicKey: nil,
+			Signature: nil,
+		},
+		Memo:    "This is a test!",
+		Entropy: 67202631355893930,
+	}
+	sb, _ := auth.GetSignBytes("pocket-testet-playground", tx)
+	fmt.Println(hex.EncodeToString(sb))
+	res, err := pk.Sign(sb)
+	if err != nil {
+		panic(err)
+	}
+	tx.Signature.Signature = res
+	pub := pk.PublicKey()
+	fmt.Println(pub.VerifyBytes(sb, res))
+	fmt.Println(hex.EncodeToString(res))
+}
+
 func TestUnstakeApp(t *testing.T) {
 	tt := []struct {
 		name         string
@@ -48,7 +110,7 @@ func TestUnstakeApp(t *testing.T) {
 				_ = memCodecMod(tc.upgrades.codecUpgrade.upgradeMod)
 			}
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			kp, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			_, _, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
@@ -111,7 +173,7 @@ func TestUnstakeNode(t *testing.T) {
 			}
 			var chains = []string{"0001"}
 			_, kb, cleanup := tc.memoryNodeFn(t, twoValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			kp, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			_, _, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
@@ -185,7 +247,7 @@ func TestStakeNode(t *testing.T) {
 				_ = memCodecMod(tc.upgrades.codecUpgrade.upgradeMod)
 			}
 			_, kb, cleanup := tc.memoryNodeFn(t, twoValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			kp, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			_, _, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
@@ -221,7 +283,7 @@ func TestStakeApp(t *testing.T) {
 			}
 
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			kp, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			_, _, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
@@ -266,7 +328,7 @@ func TestSendTransaction(t *testing.T) {
 				_ = memCodecMod(tc.upgrades.codecUpgrade.upgradeMod)
 			}
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			cb, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			kp, err := kb.Create("test")
@@ -311,7 +373,7 @@ func TestDuplicateTxWithRawTx(t *testing.T) {
 				_ = memCodecMod(tc.upgrades.codecUpgrade.upgradeMod)
 			}
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			cb, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			kp, err := kb.Create("test")
@@ -379,7 +441,7 @@ func TestChangeParamsComplexTypeTx(t *testing.T) {
 			}
 			resetTestACL()
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			cb, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			kps, err := kb.List()
@@ -425,7 +487,7 @@ func TestChangeParamsSimpleTx(t *testing.T) {
 			}
 			resetTestACL()
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			cb, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			_, err = kb.List()
@@ -465,7 +527,7 @@ func TestUpgrade(t *testing.T) {
 				_ = memCodecMod(tc.upgrades.codecUpgrade.upgradeMod)
 			}
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			cb, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			_, _, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
@@ -506,7 +568,7 @@ func TestDAOTransfer(t *testing.T) {
 				_ = memCodecMod(tc.upgrades.codecUpgrade.upgradeMod)
 			}
 			_, kb, cleanup := tc.memoryNodeFn(t, oneValTwoNodeGenesisState())
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			cb, err := kb.GetCoinbase()
 			assert.Nil(t, err)
 			_, _, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
@@ -550,7 +612,7 @@ func TestClaimAminoTx(t *testing.T) {
 			genBz, _, validators, app := fiveValidatorsOneAppGenesis()
 			kb := getInMemoryKeybase()
 			_, _, cleanup := tc.memoryNodeFn(t, genBz)
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			for i := 0; i < 5; i++ {
 				appPrivateKey, err := kb.ExportPrivateKeyObject(app.Address, "test")
 				assert.Nil(t, err)
@@ -625,7 +687,7 @@ func TestClaimProtoTx(t *testing.T) {
 			genBz, _, validators, app := fiveValidatorsOneAppGenesis()
 			kb := getInMemoryKeybase()
 			_, _, cleanup := tc.memoryNodeFn(t, genBz)
-			time.Sleep(2*time.Second)
+			time.Sleep(2 * time.Second)
 			for i := 0; i < 5; i++ {
 				appPrivateKey, err := kb.ExportPrivateKeyObject(app.Address, "test")
 				assert.Nil(t, err)
