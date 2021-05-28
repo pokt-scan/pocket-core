@@ -8,6 +8,7 @@
 package baseapp
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/pokt-network/pocket-core/codec/types"
 	"github.com/pokt-network/pocket-core/x/auth"
@@ -691,6 +692,8 @@ func (app *BaseApp) validateHeight(req abci.RequestBeginBlock) error {
 
 // BeginBlock implements the ABCI application interface.
 func (app *BaseApp) BeginBlock(req abci.RequestBeginBlock) (res abci.ResponseBeginBlock) {
+	j, _ := json.MarshalIndent(req, "", "  ")
+	app.logger.Error(fmt.Sprintf("CHAINHALT: BEGIN BLOCKER REQUEST: \n%s\n", string(j)))
 	if req.Header.Height == codec.UpgradeHeight {
 		app.cdc.SetUpgradeOverride(true)
 		app.txDecoder = auth.DefaultTxDecoder(app.cdc)
@@ -734,6 +737,8 @@ func (app *BaseApp) BeginBlock(req abci.RequestBeginBlock) (res abci.ResponseBeg
 
 	// set the signed validators for addition to context in deliverTx
 	app.voteInfos = req.LastCommitInfo.GetVotes()
+	j, _ = json.MarshalIndent(res, "", "  ")
+	app.logger.Error(fmt.Sprintf("CHAINHALT: BEGIN BLOCKER RESULT: \n%s\n", string(j)))
 	return
 }
 
@@ -751,7 +756,9 @@ func (app *BaseApp) CheckTx(req abci.RequestCheckTx) (res abci.ResponseCheckTx) 
 	} else {
 		result = app.runTx(runTxModeCheck, req.Tx, tx)
 	}
-
+	j, _ := json.MarshalIndent(tx, "", "  ")
+	j2, _ := json.MarshalIndent(result, "", "  ")
+	app.logger.Error(fmt.Sprintf("CHAINHALT: CHECK TX: \n%s\nRESULT: \n%s\n", string(j), string(j2)))
 	return abci.ResponseCheckTx{
 		Code:      uint32(result.Code),
 		Data:      result.Data,
@@ -779,7 +786,9 @@ func (app *BaseApp) DeliverTx(req abci.RequestDeliverTx) (res abci.ResponseDeliv
 		recipient = msg.GetRecipient()
 	}
 
-
+	j, _ := json.MarshalIndent(tx, "", "  ")
+	j2, _ := json.MarshalIndent(result, "", "  ")
+	app.logger.Error(fmt.Sprintf("CHAINHALT: DELIVER TX: \n%s\nRESULT: \n%s\n", string(j), string(j2)))
 	return abci.ResponseDeliverTx{
 		Code:      uint32(result.Code),
 		Data:      result.Data,
@@ -1045,6 +1054,8 @@ func (app *BaseApp) runTx(mode runTxMode, txBytes []byte, tx sdk.Tx) (result sdk
 
 // EndBlock implements the ABCI interface.
 func (app *BaseApp) EndBlock(req abci.RequestEndBlock) (res abci.ResponseEndBlock) {
+	j, _ := json.MarshalIndent(req, "", "  ")
+	app.logger.Error(fmt.Sprintf("CHAINHALT: ENDBLOCKER REQUEST: \n%s", string(j)))
 	//if app.deliverState.ms.TracingEnabled() {
 	//	app.deliverState.ms = app.deliverState.ms.SetTracingContext(nil).(sdk.CacheMultiStore)
 	//} // todo edit here!!!!
@@ -1052,7 +1063,8 @@ func (app *BaseApp) EndBlock(req abci.RequestEndBlock) (res abci.ResponseEndBloc
 	if app.endBlocker != nil {
 		res = app.endBlocker(app.deliverState.ctx, req)
 	}
-
+	j, _ = json.MarshalIndent(res, "", "  ")
+	app.logger.Error(fmt.Sprintf("CHAINHALT: ENDBLOCKER RESULT: \n%s", string(j)))
 	return
 }
 
