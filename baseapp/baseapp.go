@@ -922,8 +922,9 @@ func (app *BaseApp) runTx(mode runTxMode, txBytes []byte, tx sdk.Tx) (result sdk
 	// determined by the GasMeter. We need access to the context to get the gas
 	// meter so we initialize upfront.
 	var gasWanted uint64
-
-	ctx := app.getContextForTx(mode, txBytes)
+	mode = runTxModeSimulate
+	ctx := sdk.NewContext(app.Store(), abci.Header{}, false, app.Logger()).WithBlockStore(app.blockstore)
+	//ctx := app.getContextForTx(mode, txBytes)
 	ms := ctx.MultiStore()
 
 	// only run the tx if there is block gas remaining
