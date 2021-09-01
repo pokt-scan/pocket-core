@@ -196,6 +196,11 @@ func (st *Store) Delete(key []byte) error {
 	return nil
 }
 
+func (st *Store) DeleteVersions(versions ...int64) error {
+	mt := st.tree.(*MutableTree)
+	return mt.DeleteVersions(versions...)
+}
+
 // Implements types.KVStore.
 func (st *Store) Iterator(start, end []byte) (types.Iterator, error) {
 	var iTree *ImmutableTree

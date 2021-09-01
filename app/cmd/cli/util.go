@@ -24,6 +24,7 @@ func init() {
 	utilCmd.AddCommand(completionCmd)
 	utilCmd.AddCommand(updateConfigsCmd)
 	utilCmd.AddCommand(printDefaultConfigCmd)
+	utilCmd.AddCommand(pruneDB)
 }
 
 var utilCmd = &cobra.Command{
@@ -133,6 +134,22 @@ var exportGenesisForReset = &cobra.Command{
 			return
 		}
 		fmt.Println(j)
+	},
+}
+
+var pruneDB = &cobra.Command{
+	Use:   "unsafe-prune <last-delete-height>",
+	Short: "unsafely prune app db as a test utility, from zero to the entered height",
+	Long:  `unsafely prune app db as a test utility, from zero to the entered height`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		app.InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL)
+		latestDeleteHeight, err := strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		app.UnsafeDeleteData(app.GlobalConfig, int64(latestDeleteHeight))
 	},
 }
 

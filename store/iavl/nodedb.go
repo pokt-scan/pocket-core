@@ -182,6 +182,7 @@ func (ndb *nodeDB) DeleteVersion(version int64, checkLatestVersion bool) error {
 
 	ndb.deleteOrphans(version)
 	ndb.deleteRoot(version, checkLatestVersion)
+	fmt.Println("DeleteVersionOp completed")
 	return nil
 }
 

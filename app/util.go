@@ -4,7 +4,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"github.com/pokt-network/pocket-core/store/rootmulti"
+	"github.com/syndtr/goleveldb/leveldb/util"
+	log2 "github.com/tendermint/tendermint/libs/log"
+	state2 "github.com/tendermint/tendermint/state"
+	db2 "github.com/tendermint/tm-db"
 	"log"
+	"os"
 	"reflect"
 
 	"github.com/pokt-network/pocket-core/crypto"
@@ -118,4 +125,51 @@ func UnmarshalTx(txBytes []byte, height int64) types.StdTx {
 		log.Fatalf("Could not decode transaction: " + err.Error())
 	}
 	return tx.(auth.StdTx)
+}
+
+func UnsafeDeleteData(config sdk.Config, lastDeleteHeight int64) {
+	// setup the database
+	db, err := OpenApplicationDB(config)
+	if err != nil {
+		fmt.Println("error loading application database: ", err)
+		return
+	}
+	blockStore, _, blockStoreDB, _, err := state2.BlocksAndStateFromDB(&config.TendermintConfig, state2.DefaultDBProvider)
+	if err != nil {
+		fmt.Println("error loading blockstore/state db: ", err)
+		return
+	}
+	maxPruneHeight := blockStore.Height() - 100
+	if maxPruneHeight < 0 {
+		maxPruneHeight = 0
+	}
+	if lastDeleteHeight >= maxPruneHeight {
+		fmt.Printf("Can't prune up to %d; You must maintain atleast 100 blocks for safety\nMaxPruneHeight is %d\n", lastDeleteHeight, maxPruneHeight)
+	}
+	fmt.Println("Pruning blockstore...")
+	_, err = blockStore.PruneBlocks(lastDeleteHeight + 1)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Compacting blockstore, this could take a while...")
+	err = blockStoreDB.(*db2.GoLevelDB).Compact(util.Range{})
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println("Done pruning blockstore")
+	loggerFile, _ := os.Open(os.DevNull)
+	a := NewPocketCoreApp(nil, nil, nil, nil, log2.NewTMLogger(loggerFile), db)
+	fmt.Println("Starting unsafe delete operation from blocks 0 to latestHeight")
+	// get multistore
+	ms := a.Store().(*rootmulti.Store)
+	for i := int64(0); i < lastDeleteHeight; i++ {
+		fmt.Println("Attempting to delete version: ", i)
+		ms.DeleteVersions(i)
+	}
+	fmt.Println("Compacting AppDB, this could take a while...")
+	err = db.(*db2.GoLevelDB).Compact(util.Range{})
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	fmt.Println("done")
 }

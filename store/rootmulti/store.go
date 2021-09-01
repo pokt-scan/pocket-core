@@ -409,6 +409,23 @@ func (rs *Store) GetStore(key types.StoreKey) types.Store {
 	return store
 }
 
+func (rs *Store) GetStores() map[types.StoreKey]types.CommitStore {
+	return rs.stores
+}
+
+func (rs *Store) DeleteVersions(versions ...int64) {
+	for key, store := range rs.GetStores() {
+		if store.GetStoreType() == sdk.StoreTypeIAVL {
+			fmt.Printf("Deleting versions %v for store: %s\n", versions, key.Name())
+			i := store.(*iavl.Store)
+			err := i.DeleteVersions(versions...)
+			if err != nil {
+				fmt.Println("ERROR: " + err.Error())
+			}
+		}
+	}
+}
+
 // GetKVStore implements the MultiStore interface. If tracing is enabled on the
 // Store, a wrapped TraceKVStore will be returned with the given
 // tracer, otherwise, the original KVStore will be returned.
@@ -707,3 +724,4 @@ func setCommitInfo(batch dbm.Batch, version int64, cInfo CommitInfo) {
 	cInfoKey := fmt.Sprintf(commitInfoKeyFmt, version)
 	batch.Set([]byte(cInfoKey), cInfoBytes)
 }
+
