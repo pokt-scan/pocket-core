@@ -14,6 +14,10 @@ import (
 // 3) set new proposer
 // 4) check block sigs and byzantine evidence to slash
 func BeginBlocker(ctx sdk.Ctx, req abci.RequestBeginBlock, k Keeper) {
+	// populate ValidatorbyChainsCache
+	if ValidatorsByChain == nil {
+		k.PopulateValidatorsByChainCache(ctx)
+	}
 	// reward the proposer with fees
 	if ctx.BlockHeight() > 1 {
 		previousProposer := k.GetPreviousProposer(ctx)
@@ -63,5 +67,7 @@ func EndBlocker(ctx sdk.Ctx, k Keeper) []abci.ValidatorUpdate {
 	validatorUpdates := k.UpdateTendermintValidators(ctx)
 	// Unstake all mature validators from the unstakeing queue.
 	k.unstakeAllMatureValidators(ctx)
+	// increment cache
+	k.IncrementValidatorsByChainCache(ctx)
 	return validatorUpdates
 }

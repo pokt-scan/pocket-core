@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	strings "strings"
+	"strings"
 	"time"
 
 	"github.com/pokt-network/pocket-core/codec"
@@ -15,9 +15,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/libs/log"
-
-	"github.com/pokt-network/pocket-core/store/gaskv"
-	stypes "github.com/pokt-network/pocket-core/store/types"
 )
 
 /*
@@ -41,8 +38,6 @@ type Context struct {
 	txBytes       []byte
 	logger        log.Logger
 	voteInfo      []abci.VoteInfo
-	gasMeter      GasMeter
-	blockGasMeter GasMeter
 	checkTx       bool
 	minGasPrice   DecCoins
 	consParams    *abci.ConsensusParams
@@ -61,8 +56,6 @@ type Ctx interface {
 	TxBytes() []byte
 	Logger() log.Logger
 	VoteInfos() []abci.VoteInfo
-	GasMeter() GasMeter
-	BlockGasMeter() GasMeter
 	IsCheckTx() bool
 	MinGasPrices() DecCoins
 	EventManager() *EventManager
@@ -83,8 +76,6 @@ type Ctx interface {
 	WithTxBytes(txBytes []byte) Context
 	WithLogger(logger log.Logger) Context
 	WithVoteInfos(voteInfo []abci.VoteInfo) Context
-	WithGasMeter(meter GasMeter) Context
-	WithBlockGasMeter(meter GasMeter) Context
 	WithIsCheckTx(isCheckTx bool) Context
 	WithMinGasPrices(gasPrices DecCoins) Context
 	WithConsensusParams(params *abci.ConsensusParams) Context
@@ -115,8 +106,6 @@ func (c Context) ChainID() string             { return c.chainID }
 func (c Context) TxBytes() []byte             { return c.txBytes }
 func (c Context) Logger() log.Logger          { return c.logger }
 func (c Context) VoteInfos() []abci.VoteInfo  { return c.voteInfo }
-func (c Context) GasMeter() GasMeter          { return c.gasMeter }
-func (c Context) BlockGasMeter() GasMeter     { return c.blockGasMeter }
 func (c Context) IsCheckTx() bool             { return c.checkTx }
 func (c Context) MinGasPrices() DecCoins      { return c.minGasPrice }
 func (c Context) EventManager() *EventManager { return c.eventManager }
@@ -178,7 +167,6 @@ func NewContext(ms MultiStore, header abci.Header, isCheckTx bool, logger log.Lo
 		chainID:      header.ChainID,
 		checkTx:      isCheckTx,
 		logger:       logger,
-		gasMeter:     stypes.NewInfiniteGasMeter(),
 		minGasPrice:  DecCoins{},
 		eventManager: NewEventManager(),
 		cachedStore:  GlobalCtxCache,
@@ -367,16 +355,6 @@ func (c Context) WithVoteInfos(voteInfo []abci.VoteInfo) Context {
 	return c
 }
 
-func (c Context) WithGasMeter(meter GasMeter) Context {
-	c.gasMeter = meter
-	return c
-}
-
-func (c Context) WithBlockGasMeter(meter GasMeter) Context {
-	c.blockGasMeter = meter
-	return c
-}
-
 func (c Context) WithIsCheckTx(isCheckTx bool) Context {
 	c.checkTx = isCheckTx
 	return c
@@ -427,12 +405,12 @@ func (c Context) Value(key interface{}) interface{} {
 
 // KVStore fetches a KVStore from the MultiStore.
 func (c Context) KVStore(key StoreKey) KVStore {
-	return gaskv.NewStore(c.MultiStore().GetKVStore(key), c.GasMeter(), stypes.KVGasConfig())
+	return c.MultiStore().GetKVStore(key)
 }
 
 // TransientStore fetches a TransientStore from the MultiStore.
 func (c Context) TransientStore(key StoreKey) KVStore {
-	return gaskv.NewStore(c.MultiStore().GetKVStore(key), c.GasMeter(), stypes.TransientGasConfig())
+	return c.MultiStore().GetKVStore(key)
 }
 
 // CacheContext returns a new Context with the multi-store cached and a new

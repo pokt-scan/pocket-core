@@ -134,7 +134,7 @@ func (k Keeper) validateSlash(ctx sdk.Ctx, addr sdk.Address, infractionHeight in
 	}
 	// should not be slashing an unstaked validator
 	if validator.IsUnstaked() {
-		logger.Error(fmt.Errorf("should not be slashing unstaked validator: %s", validator.GetAddress()).Error())
+		logger.Debug(fmt.Errorf("should not be slashing unstaked validator: %s", validator.GetAddress()).Error())
 		return types.Validator{}
 	}
 	return validator

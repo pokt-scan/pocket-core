@@ -1,26 +1,22 @@
-package prefix
+package types
 
 import (
 	"bytes"
 	"io"
-
-	"github.com/pokt-network/pocket-core/store/cachekv"
-	"github.com/pokt-network/pocket-core/store/tracekv"
-	"github.com/pokt-network/pocket-core/store/types"
 )
 
-var _ types.KVStore = Store{}
+var _ KVStore = PrefixStore{}
 
-// Store is similar with tendermint/tendermint/libs/db/prefix_db
+// PrefixStore is similar with tendermint/tendermint/libs/db/prefix_db
 // both gives access only to the limited subset of the store
 // for convinience or safety
-type Store struct {
-	parent types.KVStore
+type PrefixStore struct {
+	parent KVStore
 	prefix []byte
 }
 
-func NewStore(parent types.KVStore, prefix []byte) Store {
-	return Store{
+func NewPrefixStore(parent KVStore, prefix []byte) PrefixStore {
+	return PrefixStore{
 		parent: parent,
 		prefix: prefix,
 	}
@@ -33,55 +29,55 @@ func cloneAppend(bz []byte, tail []byte) (res []byte) {
 	return
 }
 
-func (s Store) key(key []byte) (res []byte) {
+func (s PrefixStore) key(key []byte) (res []byte) {
 	if key == nil {
-		panic("nil key on Store")
+		panic("nil key on PrefixStore")
 	}
 	res = cloneAppend(s.prefix, key)
 	return
 }
 
-// Implements Store
-func (s Store) GetStoreType() types.StoreType {
+// Implements PrefixStore
+func (s PrefixStore) GetStoreType() StoreType {
 	return s.parent.GetStoreType()
 }
 
 // Implements CacheWrap
-func (s Store) CacheWrap() types.CacheWrap {
-	return cachekv.NewStore(s)
+func (s PrefixStore) CacheWrap() CacheWrap {
+	panic("")
 }
 
 // CacheWrapWithTrace implements the KVStore interface.
-func (s Store) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
-	return cachekv.NewStore(tracekv.NewStore(s, w, tc))
+func (s PrefixStore) CacheWrapWithTrace(w io.Writer, tc TraceContext) CacheWrap {
+	panic("")
 }
 
 // Implements KVStore
-func (s Store) Get(key []byte) ([]byte, error) {
+func (s PrefixStore) Get(key []byte) ([]byte, error) {
 	res, _ := s.parent.Get(s.key(key))
 	return res, nil
 }
 
 // Implements KVStore
-func (s Store) Has(key []byte) (bool, error) {
+func (s PrefixStore) Has(key []byte) (bool, error) {
 	return s.parent.Has(s.key(key))
 }
 
 // Implements KVStore
-func (s Store) Set(key, value []byte) error {
-	types.AssertValidKey(key)
-	types.AssertValidValue(value)
+func (s PrefixStore) Set(key, value []byte) error {
+	AssertValidKey(key)
+	AssertValidValue(value)
 	return s.parent.Set(s.key(key), value)
 }
 
 // Implements KVStore
-func (s Store) Delete(key []byte) error {
+func (s PrefixStore) Delete(key []byte) error {
 	return s.parent.Delete(s.key(key))
 }
 
 // Implements KVStore
 // Check https://github.com/tendermint/tendermint/blob/master/libs/db/prefix_db.go#L106
-func (s Store) Iterator(start, end []byte) (types.Iterator, error) {
+func (s PrefixStore) Iterator(start, end []byte) (Iterator, error) {
 	newstart := cloneAppend(s.prefix, start)
 
 	var newend []byte
@@ -98,7 +94,7 @@ func (s Store) Iterator(start, end []byte) (types.Iterator, error) {
 
 // Implements KVStore
 // Check https://github.com/tendermint/tendermint/blob/master/libs/db/prefix_db.go#L129
-func (s Store) ReverseIterator(start, end []byte) (types.Iterator, error) {
+func (s PrefixStore) ReverseIterator(start, end []byte) (Iterator, error) {
 	newstart := cloneAppend(s.prefix, start)
 
 	var newend []byte
@@ -113,12 +109,12 @@ func (s Store) ReverseIterator(start, end []byte) (types.Iterator, error) {
 	return newPrefixIterator(s.prefix, start, end, iter), err
 }
 
-var _ types.Iterator = (*prefixIterator)(nil)
+var _ Iterator = (*prefixIterator)(nil)
 
 type prefixIterator struct {
 	prefix     []byte
 	start, end []byte
-	iter       types.Iterator
+	iter       Iterator
 	valid      bool
 }
 
@@ -126,7 +122,7 @@ func (iter *prefixIterator) Error() error {
 	panic("implement me")
 }
 
-func newPrefixIterator(prefix, start, end []byte, parent types.Iterator) *prefixIterator {
+func newPrefixIterator(prefix, start, end []byte, parent Iterator) *prefixIterator {
 	return &prefixIterator{
 		prefix: prefix,
 		start:  start,
@@ -190,5 +186,5 @@ func stripPrefix(key []byte, prefix []byte) []byte {
 
 // wrapping types.PrefixEndBytes
 func cpIncr(bz []byte) []byte {
-	return types.PrefixEndBytes(bz)
+	return PrefixEndBytes(bz)
 }

@@ -2,13 +2,12 @@ package store
 
 import (
 	"github.com/pokt-network/pocket-core/store/types"
-	stypes "github.com/pokt-network/pocket-core/store/types"
 )
 
 // Import pocket-core/types/store.go for convenience.
 // nolint
 type (
-	PruningOptions   = types.PruningOptions
+	PruningOptions   = types.Deprecated
 	Store            = types.Store
 	Committer        = types.Committer
 	CommitStore      = types.CommitStore
@@ -27,14 +26,4 @@ type (
 	StoreType        = types.StoreType
 	Queryable        = types.Queryable
 	TraceContext     = types.TraceContext
-	Gas              = stypes.Gas
-	GasMeter         = types.GasMeter
-	GasConfig        = stypes.GasConfig
-)
-
-// nolint - reexport
-var (
-	PruneNothing    = types.PruneNothing
-	PruneEverything = types.PruneEverything
-	PruneSyncable   = types.PruneSyncable
 )

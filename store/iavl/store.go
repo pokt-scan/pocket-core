@@ -2,18 +2,13 @@ package iavl
 
 import (
 	"fmt"
+	"github.com/pokt-network/pocket-core/store/cachemulti"
+	"github.com/pokt-network/pocket-core/store/types"
+	"github.com/tendermint/tendermint/libs/kv"
 	"io"
 	"sync"
 
-	"github.com/tendermint/tendermint/libs/kv"
-
-	"github.com/pokt-network/pocket-core/store/cachekv"
-	serrors "github.com/pokt-network/pocket-core/store/errors"
-	"github.com/pokt-network/pocket-core/store/tracekv"
-	"github.com/pokt-network/pocket-core/store/types"
-
 	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/crypto/merkle"
 	dbm "github.com/tendermint/tm-db"
 )
 
@@ -22,7 +17,7 @@ const (
 )
 
 // LoadStore loads the iavl store
-func LoadStore(db dbm.DB, id types.CommitID, pruning types.PruningOptions, lazyLoading bool) (types.CommitStore, error) {
+func LoadStore(db dbm.DB, id types.CommitID, pruning types.Deprecated, lazyLoading bool) (types.CommitStore, error) {
 	var err error
 
 	tree, err := NewMutableTree(db, defaultIAVLCacheSize)
@@ -125,16 +120,28 @@ func (st *Store) Commit() types.CommitID {
 	//if st.numRecent < previous {
 	//	toRelease := previous - st.numRecent
 	//	if st.storeEvery == 0 || toRelease%st.storeEvery != 0 {
-	//		err := st.tree.DeleteVersion(toRelease)
+	//		err := st.tree.PruneVersion(toRelease)
 	//		if errCause := errors.Cause(err); errCause != nil && errCause != iavl.ErrVersionDoesNotExist {
 	//			panic(err)
 	//		}
 	//	}
 	//}
-
+	//if version-100 > 0 {
+	//	err := st.tree.DeleteVersion(version-100)
+	//	if err != nil {
+	//		fmt.Println(err)
+	//	}
+	//}
 	return types.CommitID{
 		Version: version,
 		Hash:    hash,
+	}
+}
+
+func (st *Store) DeleteVersion(version int64) {
+	err := st.tree.DeleteVersion(version)
+	if err != nil {
+		fmt.Println(fmt.Sprintf("unable to delete iavl tree version %d: %v", version, err))
 	}
 }
 
@@ -147,9 +154,8 @@ func (st *Store) LastCommitID() types.CommitID {
 }
 
 // Implements Committer.
-func (st *Store) SetPruning(opt types.PruningOptions) {
-	st.numRecent = opt.KeepRecent()
-	st.storeEvery = opt.KeepEvery()
+func (st *Store) SetPruning(opt types.Deprecated) {
+	// do nothing
 }
 
 // VersionExists returns whether or not a given version is stored.
@@ -164,12 +170,12 @@ func (st *Store) GetStoreType() types.StoreType {
 
 // Implements Store.
 func (st *Store) CacheWrap() types.CacheWrap {
-	return cachekv.NewStore(st)
+	return cachemulti.NewStoreCache(st)
 }
 
 // CacheWrapWithTrace implements the Store interface.
 func (st *Store) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
-	return cachekv.NewStore(tracekv.NewStore(st, w, tc))
+	panic("CacheWrapWithTrace not implemented for IAVL")
 }
 
 // Implements types.KVStore.
@@ -246,71 +252,7 @@ func getHeight(tree Tree, req abci.RequestQuery) int64 {
 // if you care to have the latest data to see a tx results, you must
 // explicitly set the height you want to see
 func (st *Store) Query(req abci.RequestQuery) (res abci.ResponseQuery) {
-	if len(req.Data) == 0 {
-		msg := "Query cannot be zero length"
-		return serrors.ErrTxDecode(msg).QueryResult()
-	}
-
-	tree := st.tree
-
-	// store the height we chose in the response, with 0 being changed to the
-	// latest height
-	res.Height = getHeight(tree, req)
-
-	switch req.Path {
-	case "/key":        // get by key
-		key := req.Data // data holds the key bytes
-
-		res.Key = key
-		if !st.VersionExists(res.Height) {
-			res.Log = ErrVersionDoesNotExist.Error()
-			break
-		}
-
-		if req.Prove {
-			value, proof, err := tree.GetVersionedWithProof(key, res.Height)
-			if err != nil {
-				res.Log = err.Error()
-				break
-			}
-			if proof == nil {
-				// Proof == nil implies that the store is empty.
-				if value != nil {
-					panic("unexpected value for an empty proof")
-				}
-			}
-			if value != nil {
-				// value was found
-				res.Value = value
-				res.Proof = &merkle.Proof{Ops: []merkle.ProofOp{NewValueOp(key, proof).ProofOp()}}
-			} else {
-				// value wasn't found
-				res.Value = nil
-				res.Proof = &merkle.Proof{Ops: []merkle.ProofOp{NewAbsenceOp(key, proof).ProofOp()}}
-			}
-		} else {
-			_, res.Value = tree.GetVersioned(key, res.Height)
-		}
-
-	case "/subspace":
-		var KVs []types.KVPair
-
-		subspace := req.Data
-		res.Key = subspace
-
-		iterator, _ := types.KVStorePrefixIterator(st, subspace)
-		for ; iterator.Valid(); iterator.Next() {
-			KVs = append(KVs, types.KVPair{Key: iterator.Key(), Value: iterator.Value()})
-		}
-
-		iterator.Close()
-		res.Value, _ = cdc.LegacyMarshalBinaryLengthPrefixed(KVs)
-
-	default:
-		msg := fmt.Sprintf("Unexpected Query path: %v", req.Path)
-		return serrors.ErrUnknownRequest(msg).QueryResult()
-	}
-
+	// NOT IMPLEMENTED
 	return
 }
 

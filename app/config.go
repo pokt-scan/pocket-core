@@ -6,12 +6,10 @@ import (
 	"fmt"
 	kitlevel "github.com/go-kit/kit/log/level"
 	"github.com/go-kit/kit/log/term"
-	"github.com/pokt-network/pocket-core/baseapp"
 	"github.com/pokt-network/pocket-core/codec"
 	types2 "github.com/pokt-network/pocket-core/codec/types"
 	"github.com/pokt-network/pocket-core/crypto"
 	kb "github.com/pokt-network/pocket-core/crypto/keys"
-	"github.com/pokt-network/pocket-core/store"
 	sdk "github.com/pokt-network/pocket-core/types"
 	"github.com/pokt-network/pocket-core/types/module"
 	apps "github.com/pokt-network/pocket-core/x/apps"
@@ -108,6 +106,14 @@ func InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL string) {
 	if _, err := os.Stat(configFilepath); os.IsNotExist(err) {
 		// ensure directory path made
 		err = os.MkdirAll(c.PocketConfig.DataDir+FS+sdk.ConfigDirName, os.ModePerm)
+		if err != nil {
+			log2.Fatal(err)
+		}
+	}
+	dataFilePath := datadir + FS + "data"
+	if _, err := os.Stat(dataFilePath); os.IsNotExist(err) {
+		// ensure directory path made
+		err = os.MkdirAll(dataFilePath, os.ModePerm)
 		if err != nil {
 			log2.Fatal(err)
 		}
@@ -309,7 +315,7 @@ func InitTendermint(keybase bool, chains *types.HostedBlockchains, logger log.Lo
 		keys = MustGetKeybase()
 	}
 	appCreatorFunc := func(logger log.Logger, db dbm.DB, _ io.Writer) *PocketCoreApp {
-		return NewPocketCoreApp(nil, keys, getTMClient(), chains, logger, db, baseapp.SetPruning(store.PruneNothing))
+		return NewPocketCoreApp(nil, keys, getTMClient(), chains, logger, db, nil)
 	}
 	tmNode, app, err := NewClient(config(c), appCreatorFunc)
 	if err != nil {

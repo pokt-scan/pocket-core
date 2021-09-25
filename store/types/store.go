@@ -9,7 +9,7 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tm-db"
 )
-
+type Deprecated struct {}
 type Store interface { //nolint
 	GetStoreType() StoreType
 	CacheWrapper
@@ -19,7 +19,7 @@ type Store interface { //nolint
 type Committer interface {
 	Commit() CommitID
 	LastCommitID() CommitID
-	SetPruning(PruningOptions)
+	SetPruning(Deprecated)
 }
 
 // Stores of MultiStore must implement CommitStore.

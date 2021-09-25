@@ -2,12 +2,11 @@ package types
 
 import (
 	"github.com/pokt-network/pocket-core/store/types"
-	"github.com/tendermint/tendermint/libs/kv"
 )
 
 // nolint - reexport
 type (
-	PruningOptions = types.PruningOptions
+	PruningOptions = types.Deprecated
 )
 
 // nolint - reexport
@@ -31,13 +30,6 @@ func KVStorePrefixIterator(kvs KVStore, prefix []byte) (Iterator, error) {
 // Iterator over all the keys with a certain prefix in descending order.
 func KVStoreReversePrefixIterator(kvs KVStore, prefix []byte) (Iterator, error) {
 	return types.KVStoreReversePrefixIterator(kvs, prefix)
-}
-
-// Compare two KVstores, return either the first key/value pair
-// at which they differ and whether or not they are equal, skipping
-// value comparison for a set of provided prefixes
-func DiffKVStores(a KVStore, b KVStore, prefixesToSkip [][]byte) (kvA kv.Pair, kvB kv.Pair, count int64, equal bool) {
-	return types.DiffKVStores(a, b, prefixesToSkip)
 }
 
 // nolint - reexport
@@ -125,27 +117,3 @@ type KvPairs []types.KVPair
 // every trace operation.
 type TraceContext = types.TraceContext
 
-// --------------------------------------
-
-// nolint - reexport
-type (
-	Gas       = types.Gas
-	GasMeter  = types.GasMeter
-	GasConfig = types.GasConfig
-)
-
-// nolint - reexport
-func NewGasMeter(limit Gas) GasMeter {
-	return types.NewGasMeter(limit)
-}
-
-// nolint - reexport
-type (
-	ErrorOutOfGas    = types.ErrorOutOfGas
-	ErrorGasOverflow = types.ErrorGasOverflow
-)
-
-// nolint - reexport
-func NewInfiniteGasMeter() GasMeter {
-	return types.NewInfiniteGasMeter()
-}
