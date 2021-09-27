@@ -32,9 +32,9 @@ func (k Keeper) SetStakedValidatorByChains(ctx sdk.Ctx, validator types.Validato
 
 // GetValidatorByChains - Returns the validator staked by network identifier
 func (k Keeper) GetValidatorsByChain(ctx sdk.Ctx, networkID string) (validators []sdk.Address, count int) {
-	if ValidatorsByChain[ctx.BlockHeight()-1] != nil {
-		return ValidatorsByChain[ctx.BlockHeight()][networkID], len(ValidatorsByChain[ctx.BlockHeight()][networkID])
-	}
+	//if ValidatorsByChain[ctx.BlockHeight()-1] != nil {
+	//	return ValidatorsByChain[ctx.BlockHeight()][networkID], len(ValidatorsByChain[ctx.BlockHeight()][networkID])
+	//}
 	cBz, err := hex.DecodeString(networkID)
 	if err != nil {
 		ctx.Logger().Error(fmt.Errorf("could not hex decode chains when GetValidatorByChain: with network ID: %s, at height: %d", networkID, ctx.BlockHeight()).Error())

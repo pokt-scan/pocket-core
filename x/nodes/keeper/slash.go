@@ -203,6 +203,7 @@ func (k Keeper) handleValidatorSignature(ctx sdk.Ctx, addr sdk.Address, power in
 			"this is usually due to the 2 block delay between Tendermint and the baseapp", addr))
 		return
 	}
+
 	// fetch signing info
 	signInfo, isFound := k.GetValidatorSigningInfo(ctx, addr)
 	if !isFound {
