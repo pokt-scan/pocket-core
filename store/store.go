@@ -8,5 +8,5 @@ import (
 )
 
 func NewCommitMultiStore(db dbm.DB, datadir string) types.CommitMultiStore {
-	return rootmulti.NewMultiStore(db, datadir, 100000)
+	return rootmulti.NewMultiStore(db, datadir, 20000)
 }

@@ -96,6 +96,29 @@ func (rs *MultiStore) LoadVersion(ver int64) error {
 		}
 		rs.lastCommitID = cInfo.CommitID()
 		rs.stores = newStores
+		//fmt.Println("Triggering compaction first")
+		//triggerCompaction(100, rs.AppDB)
+		//b := rs.AppDB.NewBatch()
+		//for i := int64(1); i <= 25000; i++ {
+		//	for _, s := range rs.stores {
+		//		fmt.Println("Batching prune for height ", i)
+		//		st := s.(*Store)
+		//		b = st.PruneVersion(b, i)
+		//		if i%5000 == 0 {
+		//			fmt.Println("Writing batch at ", i)
+		//			err := b.Write()
+		//			if err != nil {
+		//				panic(err)
+		//			}
+		//			b.Close()
+		//			triggerCompaction(100, rs.AppDB)
+		//			if i != 25000 {
+		//				b = rs.AppDB.NewBatch()
+		//			}
+		//		}
+		//	}
+		//}
+		//fmt.Println("Done with writing sequence")
 		return nil
 	}
 	panic("LoadVersion called for non-LatestHeight")
@@ -329,7 +352,7 @@ func triggerCompaction(pruneHeight int64, appDB dbm.DB) {
 		fmt.Println("triggering compaction")
 		err := appDB.(*dbm.GoLevelDB).Compact(util.Range{})
 		if err != nil {
-			panic("unable to manually trigger compaction in commitStores")
+			panic(err)
 		}
 	}
 }
