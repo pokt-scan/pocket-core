@@ -77,7 +77,6 @@ func NewPocketCoreApp(genState GenesisState, keybase keys.Keybase, tmClient clie
 	app.govKeeper = govKeeper.NewKeeper(
 		app.cdc,
 		app.Keys[pocketTypes.StoreKey],
-		app.Tkeys[pocketTypes.StoreKey],
 		govTypes.DefaultCodespace,
 		app.accountKeeper,
 		authSubspace, nodesSubspace, appsSubspace, pocketSubspace,

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/pokt-network/pocket-core/store/types"
-	"io"
 	"sort"
 	"sync"
 )
@@ -126,7 +125,6 @@ func (i *StoreCache) ReverseIterator(start, end []byte) (types.Iterator, error) 
 }
 
 func (i *StoreCache) Write() {
-	// TODO batch
 	for _, k := range i.sortedCache {
 		co, _ := i.unsortedCache[string(k)]
 		switch co.operation {
@@ -147,8 +145,4 @@ func (i *StoreCache) GetStoreType() types.StoreType {
 
 func (i *StoreCache) CacheWrap() types.CacheWrap {
 	panic("CacheWrap not implemented for StoreCache")
-}
-
-func (i *StoreCache) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
-	panic("CacheWrapWithTrace not implemented for StoreCache")
 }

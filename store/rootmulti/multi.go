@@ -11,7 +11,6 @@ import (
 	"github.com/tendermint/tendermint/crypto/merkle"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	dbm "github.com/tendermint/tm-db"
-	"io"
 	"os"
 	"path/filepath"
 )
@@ -21,20 +20,119 @@ var _ types.CommitMultiStore = (*MultiStore)(nil)
 const stateDBFolder = "app-state"
 
 type MultiStore struct {
-	AppDB        dbm.DB                               // storing data latestHeight -> latestHeight-pruneDepth
-	stateDir     string                               // path to datadir
+	AppDB        dbm.DB                               // application db, contains everything but the state
+	stateDir     string                               // path to statedb folder
+	stores       map[types.StoreKey]types.CommitStore // prefixed abstractions; living inside appDB
 	lastCommitID types.CommitID                       // lastCommitID from the IAVL
-	stores       map[types.StoreKey]types.CommitStore // the stores where all data besides appHash is queried
-	pruneDepth   int                                  // depth where we will prune AppDB
+	pruneDepth   int64                                // -1 is off
 }
 
-func NewMultiStore(appDB dbm.DB, datadir string, pruneDepth int) *MultiStore {
+func NewMultiStore(appDB dbm.DB, datadir string, pruneDepth int64) *MultiStore {
 	return &MultiStore{
 		AppDB:      appDB,
 		stateDir:   datadir + string(filepath.Separator) + stateDBFolder,
 		stores:     make(map[types.StoreKey]types.CommitStore),
 		pruneDepth: pruneDepth,
 	}
+}
+
+// read or write
+func (rs *MultiStore) LoadLatestVersion() error {
+	// nuke the state
+	_ = os.RemoveAll(rs.stateDir)
+	// get latest height
+	latestHeight := getLatestVersion(rs.AppDB)
+	// if genesis
+	if latestHeight == 0 {
+		for key := range rs.stores {
+			store := NewStore(rs.AppDB, latestHeight, key.Name(), types.CommitID{}, rs.stateDir, true)
+			rs.stores[key] = store
+		}
+		return nil
+	}
+	// get commit information
+	cInfo, err := getCommitInfo(rs.AppDB, latestHeight)
+	if err != nil {
+		return err
+	}
+	rs.lastCommitID = cInfo.CommitID()
+	// convert slice into map
+	infos := make(map[string]StoreInfo)
+	for _, storeInfo := range cInfo.StoreInfos {
+		infos[storeInfo.Name] = storeInfo
+	}
+	// create new mutable store
+	for key := range rs.stores {
+		rs.stores[key] = NewStore(rs.AppDB, latestHeight, key.Name(), infos[key.Name()].Core.CommitID, rs.stateDir, true)
+	}
+	return nil
+}
+
+// read only
+func (rs *MultiStore) LoadImmutableVersion(height int64) (*types.Store, error) {
+	// if latest height
+	if rs.lastCommitID.Version == height {
+		return rs.CopyStore(), nil
+	}
+	// ensure not pruned
+	if rs.Pruning() {
+		oldestHeight := rs.lastCommitID.Version - int64(rs.pruneDepth)
+		if height < oldestHeight {
+			return nil, fmt.Errorf("unable to get version %d heights before %d are pruned", height, oldestHeight)
+		}
+	}
+	// load immutable from previous stores
+	prevStores := make(map[types.StoreKey]types.CommitStore)
+	for k, store := range rs.stores {
+		prevStores[k] = store.(*Store).LoadImmutableVersion(height, rs.stateDir)
+	}
+	// create struct & return
+	ms := types.Store(&MultiStore{
+		AppDB:        rs.AppDB,
+		lastCommitID: rs.lastCommitID,
+		stores:       prevStores,
+		pruneDepth:   rs.pruneDepth,
+	})
+	return &ms, nil
+}
+
+// Persist IAVL & StateDB
+func (rs *MultiStore) Commit() types.CommitID {
+	// create atomic batch
+	batch := rs.AppDB.NewBatch()
+	defer batch.Close()
+	// increment height
+	height := rs.lastCommitID.Version + 1
+	// create new commitInfo
+	commitInfo := CommitInfo{
+		Version:    height,
+		StoreInfos: make([]StoreInfo, 0, len(rs.stores)),
+	}
+	// for each store; CommitBatch() & add CommitID to CommitInfo
+	// if Pruning(); prune height - depth
+	for key, store := range rs.stores {
+		commitID, batch := store.(*Store).CommitBatch(batch)
+		commitInfo.StoreInfos = append(commitInfo.StoreInfos, StoreInfo{
+			Name: key.Name(),
+			Core: StoreCore{
+				CommitID: commitID,
+			},
+		})
+		if rs.Pruning() {
+			batch = store.(*Store).PruneVersion(batch, height-rs.pruneDepth)
+		}
+	}
+	// save commitInfo & latestHeight
+	setCommitInfo(batch, height, commitInfo)
+	setLatestVersion(batch, height)
+	// write the batch
+	_ = batch.Write()
+	// prep next height
+	rs.lastCommitID = types.CommitID{
+		Version: height,
+		Hash:    commitInfo.Hash(),
+	}
+	return rs.lastCommitID
 }
 
 func (rs *MultiStore) CopyStore() *types.Store {
@@ -53,152 +151,6 @@ func (rs *MultiStore) CopyStore() *types.Store {
 
 func (rs *MultiStore) GetStoreType() types.StoreType {
 	return types.StoreTypeMulti
-}
-
-func (rs *MultiStore) LoadLatestVersion() error {
-	// nuke the statedb
-	err := os.RemoveAll(rs.stateDir)
-	if err != nil {
-		fmt.Println("Unable to delete app-state folder @")
-	}
-	latest := getLatestVersion(rs.AppDB)
-	return rs.LoadVersion(latest)
-}
-
-func (rs *MultiStore) LoadVersion(ver int64) error {
-	if getLatestVersion(rs.AppDB) == ver {
-		var newStores = make(map[types.StoreKey]types.CommitStore)
-		if ver == 0 {
-			for key := range rs.stores {
-				store := NewStore(rs.AppDB, ver, key.Name(), types.CommitID{}, rs.stateDir, true)
-				newStores[key] = store
-			}
-			rs.stores = newStores
-			return nil
-		}
-		cInfo, err := getCommitInfo(rs.AppDB, ver)
-		if err != nil {
-			return err
-		}
-		// convert StoreInfos slice to map
-		infos := make(map[types.StoreKey]StoreInfo)
-		for _, storeInfo := range cInfo.StoreInfos {
-			infos[rs.nameToKey(storeInfo.Name)] = storeInfo
-		}
-		for key := range rs.stores {
-			var id types.CommitID
-			info, ok := infos[key]
-			if ok {
-				id = info.Core.CommitID
-			}
-			store := NewStore(rs.AppDB, ver, key.Name(), id, rs.stateDir, true)
-			newStores[key] = store
-		}
-		rs.lastCommitID = cInfo.CommitID()
-		rs.stores = newStores
-		//fmt.Println("Triggering compaction first")
-		//triggerCompaction(100, rs.AppDB)
-		//b := rs.AppDB.NewBatch()
-		//for i := int64(1); i <= 25000; i++ {
-		//	for _, s := range rs.stores {
-		//		fmt.Println("Batching prune for height ", i)
-		//		st := s.(*Store)
-		//		b = st.PruneVersion(b, i)
-		//		if i%5000 == 0 {
-		//			fmt.Println("Writing batch at ", i)
-		//			err := b.Write()
-		//			if err != nil {
-		//				panic(err)
-		//			}
-		//			b.Close()
-		//			triggerCompaction(100, rs.AppDB)
-		//			if i != 25000 {
-		//				b = rs.AppDB.NewBatch()
-		//			}
-		//		}
-		//	}
-		//}
-		//fmt.Println("Done with writing sequence")
-		return nil
-	}
-	panic("LoadVersion called for non-LatestHeight")
-}
-
-func (rs *MultiStore) LoadLazyVersion(ver int64) (*types.Store, error) {
-	latestHeight := rs.lastCommitID.Version
-	if rs.lastCommitID.Version == ver {
-		return rs.CopyStore(), nil
-	}
-	if rs.Pruning() {
-		oldestHeight := latestHeight - int64(rs.pruneDepth)
-		if ver < oldestHeight {
-			return nil, fmt.Errorf("unable to get version %d heights before %d are pruned", ver, oldestHeight)
-		}
-	}
-	newStores := make(map[types.StoreKey]types.CommitStore)
-	for k, v := range rs.stores {
-		a, ok := (v).(*Store)
-		if !ok {
-			continue
-		}
-		newStores[k] = a.LoadImmutableVersion(ver, rs.stateDir)
-	}
-	s := types.Store(&MultiStore{
-		AppDB:        rs.AppDB,
-		lastCommitID: rs.lastCommitID,
-		stores:       newStores,
-		pruneDepth:   rs.pruneDepth,
-	})
-	return &s, nil
-}
-
-func (rs *MultiStore) Commit() types.CommitID {
-	// Commit stores.
-	commitInfo := CommitInfo{}
-	batch := rs.AppDB.NewBatch()
-	defer batch.Close()
-	version := rs.lastCommitID.Version + 1
-	commitInfo, batch = commitStores(version, int64(rs.pruneDepth), rs.stores, batch)
-	setCommitInfo(batch, version, commitInfo)
-	setLatestVersion(batch, version)
-	_ = batch.Write()
-	// Prepare for next version.
-	commitID := types.CommitID{
-		Version: version,
-		Hash:    commitInfo.Hash(),
-	}
-	rs.lastCommitID = commitID
-	return commitID
-}
-
-// Commits each store and returns a new commitInfo.
-func commitStores(version, pruneAfter int64, storeMap map[types.StoreKey]types.CommitStore, b dbm.Batch) (ci CommitInfo, batch dbm.Batch) {
-	storeInfos := make([]StoreInfo, 0, len(storeMap))
-	// Prune
-	pruneHeight := version - pruneAfter
-	for key, store := range storeMap {
-		s, ok := store.(*Store)
-		if !ok {
-			panic("non-Store mounted in commitStores")
-		}
-		// Commit
-		commitID, batch := s.CommitBatch(b)
-		// Record CommitID
-		si := StoreInfo{}
-		si.Name = key.Name()
-		si.Core.CommitID = commitID
-		// si.Core.StoreType = store.GetStoreType()
-		storeInfos = append(storeInfos, si)
-
-		if pruneAfter != -1 && pruneHeight > 0 {
-			b = s.PruneVersion(batch, pruneHeight)
-		}
-	}
-	ci = CommitInfo{
-		Version:    version,
-		StoreInfos: storeInfos,
-	}
-	return ci, b
 }
 
 func (rs *MultiStore) LastCommitID() types.CommitID {
@@ -222,26 +174,9 @@ func (rs *MultiStore) GetKVStore(key types.StoreKey) types.KVStore {
 }
 
 func (rs *MultiStore) MountStoreWithDB(key types.StoreKey, typ types.StoreType, db dbm.DB) {
-	if typ == types.StoreTypeIAVL {
+	if typ == types.StoreTypeDefault {
 		rs.stores[key] = nil
 	}
-}
-
-func (rs *MultiStore) GetCommitStore(key types.StoreKey) types.CommitStore {
-	return rs.stores[key]
-}
-
-func (rs *MultiStore) GetCommitKVStore(key types.StoreKey) types.CommitKVStore {
-	return rs.GetCommitStore(key).(types.CommitKVStore)
-}
-
-func (rs *MultiStore) nameToKey(name string) types.StoreKey {
-	for key := range rs.stores {
-		if key.Name() == name {
-			return key
-		}
-	}
-	panic("Unknown name " + name)
 }
 
 func (rs *MultiStore) Pruning() bool {
@@ -275,34 +210,28 @@ func getLatestVersion(db dbm.DB) int64 {
 	return int64(latest)
 }
 
-// Gets commitInfo from disk.
+// Get CommitInfo from disk
 func getCommitInfo(db dbm.DB, ver int64) (CommitInfo, error) {
-
-	// Get from DB.
-	cInfoKey := fmt.Sprintf(commitInfoKeyFmt, ver)
-	cInfoBytes, _ := db.Get([]byte(cInfoKey))
-	if cInfoBytes == nil {
+	// get from store
+	cInfoBz, _ := db.Get([]byte(fmt.Sprintf(commitInfoKeyFmt, ver)))
+	if cInfoBz == nil {
 		return CommitInfo{}, fmt.Errorf("failed to get Store: no data")
 	}
-
+	// unmarshal from amino bytes
 	var cInfo CommitInfo
-
-	err := cdc.LegacyUnmarshalBinaryLengthPrefixed(cInfoBytes, &cInfo)
+	err := cdc.LegacyUnmarshalBinaryLengthPrefixed(cInfoBz, &cInfo)
 	if err != nil {
 		return CommitInfo{}, fmt.Errorf("failed to get Store: %v", err)
 	}
-
 	return cInfo, nil
 }
 
-// Hash returns the simple merkle root hash of the stores sorted by name.
+// Hash returns the simple merkle root hash of the stores sorted by name
 func (ci *CommitInfo) Hash() []byte {
-	// TODO: cache to ci.hash []byte
 	m := make(map[string][]byte, len(ci.StoreInfos))
 	for _, storeInfo := range ci.StoreInfos {
 		m[storeInfo.Name] = storeInfo.Hash()
 	}
-
 	return merkle.SimpleHashFromMap(m)
 }
 
@@ -315,17 +244,12 @@ func (ci *CommitInfo) CommitID() types.CommitID {
 
 // Implements merkle.Hasher.
 func (si StoreInfo) Hash() []byte {
-	// Doesn't write Name, since merkle.SimpleHashFromMap() will
-	// include them via the keys.
 	bz := si.Core.CommitID.Hash
 	hasher := tmhash.New()
-
 	_, err := hasher.Write(bz)
 	if err != nil {
-		// TODO: Handle with #870
 		panic(err)
 	}
-
 	return hasher.Sum(nil)
 }
 
@@ -346,8 +270,8 @@ func setLatestVersion(batch dbm.Batch, version int64) {
 	batch.Set([]byte(latestVersionKey), latestBytes)
 }
 
+// manually trigger db compaction
 func triggerCompaction(pruneHeight int64, appDB dbm.DB) {
-	// manuall trigger compaction
 	if pruneHeight%100 == 0 && pruneHeight != 0 {
 		fmt.Println("triggering compaction")
 		err := appDB.(*dbm.GoLevelDB).Compact(util.Range{})
@@ -355,34 +279,4 @@ func triggerCompaction(pruneHeight int64, appDB dbm.DB) {
 			panic(err)
 		}
 	}
-}
-
-// Deprecated below
-
-func (rs *MultiStore) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
-	panic("CacheWrapWithTrace not implemented in MultiStore")
-}
-
-func (rs *MultiStore) SetPruning(types.Deprecated) {
-	panic("SetPruning is deprecated in MultiStore")
-}
-
-func (rs *MultiStore) CacheMultiStoreWithVersion(version int64) (types.CacheMultiStore, error) {
-	panic("CacheMultiStoreWithVersion is not implemented for MultiStore")
-}
-
-func (rs *MultiStore) TracingEnabled() bool {
-	panic("Tracing is not implemented for MultiStore")
-}
-
-func (rs *MultiStore) SetTracer(w io.Writer) types.MultiStore {
-	panic("Tracing is not implemented for MultiStore")
-}
-
-func (rs *MultiStore) SetTracingContext(types.TraceContext) types.MultiStore {
-	panic("Tracing is not implemented for MultiStore")
-}
-
-func (rs *MultiStore) RollbackVersion(ver int64) error {
-	panic("Rollback is not implemented for MultiStore")
 }

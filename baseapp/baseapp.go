@@ -11,12 +11,12 @@ import (
 	"fmt"
 	"github.com/pokt-network/pocket-core/codec/types"
 	"github.com/pokt-network/pocket-core/store/rootmulti"
+	storeTypes "github.com/pokt-network/pocket-core/store/types"
 	"github.com/pokt-network/pocket-core/x/auth"
 	"github.com/tendermint/tendermint/evidence"
 	"github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/state/txindex"
 	tmStore "github.com/tendermint/tendermint/store"
-	"io"
 	"os"
 	"reflect"
 	"runtime/debug"
@@ -33,7 +33,6 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/pokt-network/pocket-core/codec"
-	"github.com/pokt-network/pocket-core/store"
 	sdk "github.com/pokt-network/pocket-core/types"
 )
 
@@ -124,7 +123,7 @@ func NewBaseApp(name string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecod
 		name:           name,
 		db:             db,
 		cdc:            cdc,
-		cms:            store.NewCommitMultiStore(db, datadir),
+		cms:            rootmulti.NewMultiStore(db, datadir, 20000),
 		router:         NewRouter(),
 		queryRouter:    NewQueryRouter(),
 		txDecoder:      txDecoder,
@@ -192,12 +191,6 @@ func (app *BaseApp) TMNode() *node.Node {
 	return app.tmNode
 }
 
-// SetCommitMultiStoreTracer sets the store tracer on the BaseApp's underlying
-// CommitMultiStore.
-func (app *BaseApp) SetCommitMultiStoreTracer(w io.Writer) {
-	app.cms.SetTracer(w)
-}
-
 // MountStores mounts all IAVL or DB stores to the provided keys in the BaseApp
 // multistore.
 func (app *BaseApp) MountStores(keys ...sdk.StoreKey) {
@@ -206,13 +199,7 @@ func (app *BaseApp) MountStores(keys ...sdk.StoreKey) {
 		case *sdk.KVStoreKey:
 			if !app.fauxMerkleMode {
 				app.MountStore(key, sdk.StoreTypeIAVL)
-			} else {
-				// StoreTypeDB doesn't do anything upon commit, and it doesn't
-				// retain history, but it's useful for faster simulation.
-				app.MountStore(key, sdk.StoreTypeDB)
 			}
-		case *sdk.TransientStoreKey:
-			app.MountStore(key, sdk.StoreTypeTransient)
 		default:
 			fmt.Println("Unrecognized store key type " + reflect.TypeOf(key).Name())
 			os.Exit(1)
@@ -227,18 +214,8 @@ func (app *BaseApp) MountKVStores(keys map[string]*sdk.KVStoreKey) {
 	for _, key := range keys {
 		if !app.fauxMerkleMode {
 			app.MountStore(key, sdk.StoreTypeIAVL)
-		} else {
-			// StoreTypeDB doesn't do anything upon commit, and it doesn't
-			// retain history, but it's useful for faster simulation.
-			app.MountStore(key, sdk.StoreTypeDB)
 		}
 	}
-}
-
-// MountStores mounts all IAVL or DB stores to the provided keys in the BaseApp
-// multistore.
-func (app *BaseApp) MountTransientStores(keys map[string]*sdk.TransientStoreKey) {
-	panic("deprecated")
 }
 
 // MountStoreWithDB mounts a store to the provided key in the BaseApp
@@ -552,28 +529,8 @@ func handleQueryApp(app *BaseApp, path []string, req abci.RequestQuery) (res abc
 }
 
 func handleQueryStore(app *BaseApp, path []string, req abci.RequestQuery) abci.ResponseQuery {
-	// "/store" prefix for store queries
-	queryable, ok := app.cms.(sdk.Queryable)
-	if !ok {
-		msg := "multistore doesn't support queries"
-		return sdk.ErrUnknownRequest(msg).QueryResult()
-	}
-
-	req.Path = "/" + strings.Join(path[1:], "/")
-
-	// when a client did not provide a query height, manually inject the latest
-	if req.Height == 0 {
-		req.Height = app.LastBlockHeight()
-	}
-
-	if req.Height <= 1 && req.Prove {
-		return sdk.ErrInternal("cannot query with proof when height <= 1; please provide a valid height").QueryResult()
-	}
-
-	resp := queryable.Query(req)
-	resp.Height = req.Height
-
-	return resp
+	msg := "multistore doesn't support queries"
+	return sdk.ErrUnknownRequest(msg).QueryResult()
 }
 
 func handleQueryP2P(app *BaseApp, path []string, _ abci.RequestQuery) (res abci.ResponseQuery) {
@@ -624,7 +581,7 @@ func handleQueryCustom(app *BaseApp, path []string, req abci.RequestQuery) (res 
 		return sdk.ErrInternal("cannot query with proof when height <= 1; please provide a valid height").QueryResult()
 	}
 	// new multistore for copy
-	store, err := app.cms.(*rootmulti.MultiStore).LoadLazyVersion(req.Height)
+	store, err := app.cms.(*rootmulti.MultiStore).LoadImmutableVersion(req.Height)
 	if err != nil {
 		return sdk.ErrInternal(
 			fmt.Sprintf(
@@ -869,7 +826,7 @@ func (app *BaseApp) getState(mode runTxMode) *state {
 // a cache wrapped multi-store.
 func (app *BaseApp) txContext(ctx sdk.Ctx, txBytes []byte) (
 	sdk.Context, sdk.MultiStore) { // todo edit here!!!
-	newMS := store.MultiStore((*app.cms.(store.CommitMultiStore).(*rootmulti.MultiStore).CopyStore()).(*rootmulti.MultiStore))
+	newMS := storeTypes.MultiStore((*app.cms.(storeTypes.CommitMultiStore).(*rootmulti.MultiStore).CopyStore()).(*rootmulti.MultiStore))
 	return ctx.WithMultiStore(newMS), newMS
 }
 

@@ -5,7 +5,6 @@ import (
 	"github.com/pokt-network/pocket-core/store/cachemulti"
 	"github.com/pokt-network/pocket-core/store/types"
 	"github.com/tendermint/tendermint/libs/kv"
-	"io"
 	"sync"
 
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -17,7 +16,7 @@ const (
 )
 
 // LoadStore loads the iavl store
-func LoadStore(db dbm.DB, id types.CommitID, pruning types.Deprecated, lazyLoading bool) (types.CommitStore, error) {
+func LoadStore(db dbm.DB, id types.CommitID, lazyLoading bool) (*Store, error) {
 	var err error
 
 	tree, err := NewMutableTree(db, defaultIAVLCacheSize)
@@ -36,7 +35,6 @@ func LoadStore(db dbm.DB, id types.CommitID, pruning types.Deprecated, lazyLoadi
 	}
 
 	iavl := UnsafeNewStore(tree, int64(0), int64(0))
-	iavl.SetPruning(pruning)
 
 	return iavl, nil
 }
@@ -45,7 +43,6 @@ func LoadStore(db dbm.DB, id types.CommitID, pruning types.Deprecated, lazyLoadi
 
 var _ types.KVStore = (*Store)(nil)
 var _ types.CommitStore = (*Store)(nil)
-var _ types.Queryable = (*Store)(nil)
 
 // Store Implements types.KVStore and CommitStore.
 type Store struct {
@@ -75,7 +72,7 @@ func UnsafeNewStore(tree *MutableTree, numRecent int64, storeEvery int64) *Store
 	return st
 }
 
-// LoadLazyVersion returns a reference to a new store backed by an immutable IAVL
+// LoadImmutableVersion returns a reference to a new store backed by an immutable IAVL
 // tree at a specific version (height) without any pruning options. This should
 // be used for querying and iteration only. If the version does not exist or has
 // been pruned, an error will be returned. Any mutable operations executed will
@@ -153,11 +150,6 @@ func (st *Store) LastCommitID() types.CommitID {
 	}
 }
 
-// Implements Committer.
-func (st *Store) SetPruning(opt types.Deprecated) {
-	// do nothing
-}
-
 // VersionExists returns whether or not a given version is stored.
 func (st *Store) VersionExists(version int64) bool {
 	return st.tree.VersionExists(version)
@@ -165,7 +157,7 @@ func (st *Store) VersionExists(version int64) bool {
 
 // Implements Store.
 func (st *Store) GetStoreType() types.StoreType {
-	return types.StoreTypeIAVL
+	return types.StoreTypeDefault
 }
 
 // Implements Store.
@@ -173,14 +165,11 @@ func (st *Store) CacheWrap() types.CacheWrap {
 	return cachemulti.NewStoreCache(st)
 }
 
-// CacheWrapWithTrace implements the Store interface.
-func (st *Store) CacheWrapWithTrace(w io.Writer, tc types.TraceContext) types.CacheWrap {
-	panic("CacheWrapWithTrace not implemented for IAVL")
-}
-
 // Implements types.KVStore.
 func (st *Store) Set(key, value []byte) error {
-	types.AssertValidValue(value)
+	if value == nil {
+		panic("value is nil")
+	}
 	st.tree.Set(key, value)
 	return nil
 }
