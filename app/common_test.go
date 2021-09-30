@@ -17,7 +17,6 @@ import (
 	"github.com/pokt-network/pocket-core/codec"
 	"github.com/pokt-network/pocket-core/crypto"
 	"github.com/pokt-network/pocket-core/crypto/keys"
-	"github.com/pokt-network/pocket-core/store"
 
 	// sdk "github.com/pokt-network/pocket-core/types"
 	sdk "github.com/pokt-network/pocket-core/types"

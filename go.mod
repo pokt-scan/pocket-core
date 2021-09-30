@@ -10,6 +10,7 @@ require (
 	github.com/jordanorelli/lexnum v0.0.0-20141216151731-460eeb125754
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
+	github.com/tendermint/tendermint v1.0.0
 	github.com/prometheus/client_golang v1.5.1
 	github.com/regen-network/cosmos-proto v0.3.0
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
@@ -27,5 +28,6 @@ require (
 	gopkg.in/yaml.v2 v2.2.5
 )
 
-replace github.com/tendermint/tendermint => github.com/pokt-network/tendermint v0.32.11-0.20210929170005-d755854a920c
+replace github.com/tendermint/tendermint => github.com/pokt-network/tendermint v0.32.11-0.20210930234853-d4f37f9bac59
+
 replace github.com/tendermint/tm-db => github.com/pokt-network/tm-db v0.5.2-0.20210901185636-199451fd4c25
