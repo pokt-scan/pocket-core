@@ -47,7 +47,7 @@ jobs:
       # Run tests
       - run:
          name: 'test'
-         command: go test -short -p 1  $(go list ./... | circleci tests split --split-by=filesize)
+         command: go test -short -p 1  $(go list ./... | circleci tests split)
 #         command: go test -short -p 1 ./...
          no_output_timeout: 20m
   # Job to trigger the Pocket Core deployments CI with a specific branch
