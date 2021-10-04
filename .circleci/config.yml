@@ -25,9 +25,9 @@ jobs:
       - run: go build app/cmd/pocket_core/main.go
       # Cache build
       - save_cache:
-          key: pocket-core-build-{{ .Environment.CIRCLE_SHA1 }}
+          key: go-mod-v4-{{ checksum "go.sum" }}
           paths:
-            -  /go/src/github.com/pokt-network/pocket-core
+            - "/go/pkg/mod"
       # Run tests
       #- run: go test -p 1 ./...
   # Generic test job
@@ -42,11 +42,12 @@ jobs:
     steps:
       # Restore build cache
       - restore_cache:
-          key: pocket-core-build-{{ .Environment.CIRCLE_SHA1 }}
+          keys:
+            - go-mod-v4-{{ checksum "go.sum" }}
       # Run tests
       - run:
          name: 'test'
-         command: go test -short -p 1  $(go list ./... | circleci tests split --split-by=timings)
+         command: go test -v -short -p 1  $(go list ./... | circleci tests split --split-by=timings)
 #         command: go test -short -p 1 ./...
          no_output_timeout: 20m
   # Job to trigger the Pocket Core deployments CI with a specific branch
