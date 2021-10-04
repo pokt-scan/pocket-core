@@ -18,7 +18,7 @@ jobs:
       # Checkout the code
       - checkout
       # Install dependencies
-      - run: ./deps.sh
+      # - run: ./deps.sh
       # static analyzer
       # - run: go vet ./...
       # Build the binary
@@ -39,20 +39,17 @@ jobs:
         environment:
           TEST_RESULTS: /tmp/test-results # path to where test results will be saved
     working_directory: /go/src/github.com/pokt-network/pocket-core
-    parallelism: 4
+    parallelism: 2
     steps:
       # Restore build cache
       - restore_cache:
           key: pocket-core-build-{{ .Environment.CIRCLE_SHA1 }}
-      - run: mkdir -p $TEST_RESULTS # create the test results directory
       # Run tests
       - run:
          name: 'test'
-         command: go test -v -short -p 1  $(go list ./... | circleci tests split --split-by=timings)
+         command: go test -short -p 1  $(go list ./... | circleci tests split --split-by=filesize)
 #         command: go test -short -p 1 ./...
          no_output_timeout: 20m
-      - store_test_results: # upload test results for display in Test Summary
-          path: /tmp/test-results
   # Job to trigger the Pocket Core deployments CI with a specific branch
   trigger-pocket-core-deployments-branches:
     docker:
