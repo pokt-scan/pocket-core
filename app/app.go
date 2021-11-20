@@ -128,6 +128,7 @@ func NewPocketCoreApp(genState GenesisState, keybase keys.Keybase, tmClient clie
 	}
 	ctx := sdk.NewContext(app.Store(), abci.Header{}, false, app.Logger()).WithBlockStore(app.BlockStore())
 	if upgradeHeight := app.govKeeper.GetUpgrade(ctx).Height; upgradeHeight != 0 {
+		codec.OldUpgradeHeight = codec.UpgradeHeight
 		codec.UpgradeHeight = upgradeHeight
 	}
 	return app

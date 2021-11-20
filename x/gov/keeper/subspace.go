@@ -3,6 +3,7 @@ package keeper
 import (
 	"fmt"
 	"github.com/pokt-network/pocket-core/codec"
+	"math"
 	"os"
 
 	sdk "github.com/pokt-network/pocket-core/types"
@@ -106,7 +107,12 @@ func (k Keeper) HandleUpgrade(ctx sdk.Ctx, aclKey string, paramValue interface{}
 			ctx.Logger().Error(fmt.Sprintf("unable to convert %v to upgrade, can't emit event about upgrade, at height: %d", paramValue, ctx.BlockHeight()))
 			return sdk.Result{Events: ctx.EventManager().Events()}
 		}
-		codec.UpgradeHeight = u.Height
+		if codec.UpgradeHeight != math.MaxInt64 && ctx.BlockHeight() > codec.GetCodecUpgradeHeight() {
+			codec.OldUpgradeHeight = codec.UpgradeHeight
+			codec.UpgradeHeight = u.Height
+		} else {
+			codec.UpgradeHeight = u.Height
+		}
 		ctx.EventManager().EmitEvent(sdk.NewEvent(
 			types.EventUpgrade,
 			sdk.NewAttribute(sdk.AttributeKeyModule, types.ModuleName),

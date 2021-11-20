@@ -25,8 +25,29 @@ func NewCodec(anyUnpacker types.AnyUnpacker) *Codec {
 
 var (
 	UpgradeHeight                    int64 = math.MaxInt64
+	OldUpgradeHeight                 int64 = 0
 	NotProtoCompatibleInterfaceError       = errors.New("the interface passed for encoding does not implement proto marshaller")
 )
+
+const UpgradeCodecHeight = int64(30024)
+
+//aux func to bypass on lower heights for test and because we are passing to tendermint
+//the first upgrade will be treated as the "codec upgrade" with all the features that unlocked at that point the
+//max block for that upgrade is UpgradeCodecHeight(30024)
+func GetCodecUpgradeHeight() int64 {
+	//check if this is the first upgrade
+	if OldUpgradeHeight == 0 {
+		if UpgradeHeight >= UpgradeCodecHeight {
+			return UpgradeCodecHeight
+		} else {
+			return UpgradeHeight
+		}
+	} else {
+		//this is not the first upgrade as OldUpgradeHeight is non 0
+		//we return OldUpgradeHeight as the CodecUpgradeHeight
+		return OldUpgradeHeight
+	}
+}
 
 func (cdc *Codec) RegisterStructure(o interface{}, name string) {
 	cdc.legacyCdc.RegisterConcrete(o, name, nil)
@@ -199,9 +220,25 @@ func (cdc *Codec) ProtoCodec() *ProtoCodec {
 }
 
 //Note: includes the actual upgrade height
+//now with shortcut on mainnet so we dont go back
 func (cdc *Codec) IsAfterUpgrade(height int64) bool {
-	if cdc.upgradeOverride != -1 {
-		return cdc.upgradeOverride == 1
+	//quick exit for mainnet
+	if height >= UpgradeCodecHeight {
+		return true
+	} else {
+		//original
+		if cdc.upgradeOverride != -1 {
+			return cdc.upgradeOverride == 1
+		}
+		return UpgradeHeight <= height || height == -1
 	}
-	return UpgradeHeight <= height || height == -1
+}
+
+func (cdc *Codec) IsAfterNextUpgrade(height int64) bool {
+
+	if OldUpgradeHeight == 0 || height <= OldUpgradeHeight {
+		return false
+	} else {
+		return UpgradeHeight <= height
+	}
 }
