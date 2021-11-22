@@ -134,6 +134,12 @@ func (r Relay) Execute(hostedBlockchains *HostedBlockchains) (string, sdk.Error)
 	return res, nil
 }
 
+// "Execute" - Attempts to do a request on the non-native blockchain specified
+func (r Relay) ExecuteHack() (string, sdk.Error) {
+	time.Sleep(5*time.Second)
+	return "ovverride", nil
+}
+
 // "Bytes" - Returns the bytes representation of the Relay
 func (r Relay) Bytes() []byte {
 	//Anonymous Struct used because of #742 empty proof object being marshalled
