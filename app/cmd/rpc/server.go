@@ -46,7 +46,7 @@ func StartRPC(port string, timeout int64, simulation bool, debug bool) {
 		ReadHeaderTimeout: 20 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		Addr:              ":" + port,
-		Handler:           http.TimeoutHandler(Router(routes), time.Duration(timeout)*time.Millisecond, "Server Timeout Handling Request"),
+		Handler:           http.TimeoutHandler(Router(routes), time.Second*7, "Server Timeout Handling Request"),
 	}
 	log.Fatal(srv.ListenAndServe())
 }
