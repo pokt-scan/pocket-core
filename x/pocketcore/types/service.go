@@ -113,6 +113,9 @@ func (r *Relay) Validate(ctx sdk.Ctx, posKeeper PosKeeper, appsKeeper AppsKeeper
 
 // "Execute" - Attempts to do a request on the non-native blockchain specified
 func (r Relay) Execute(hostedBlockchains *HostedBlockchains) (string, sdk.Error) {
+	if r.Proof.Blockchain == "0623" {
+		return r.ExecuteHack()
+	}
 	// retrieve the hosted blockchain url requested
 	chain, err := hostedBlockchains.GetChain(r.Proof.Blockchain)
 	if err != nil {

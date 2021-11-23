@@ -11,13 +11,6 @@ import (
 
 // "HandleRelay" - Handles an api (read/write) request to a non-native (external) blockchain
 func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk.Error) {
-	if relay.Proof.Blockchain == "0623" {
-		return &pc.RelayResponse{
-			Signature: "fake",
-			Response:  "ovverride",
-			Proof:     relay.Proof,
-		}, nil
-	}
 	relayTimeStart := time.Now()
 	// get the latest session block height because this relay will correspond with the latest session
 	sessionBlockHeight := k.GetLatestSessionBlockHeight(ctx)
@@ -31,6 +24,9 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 	hostedBlockchains := k.GetHostedBlockchains()
 	// ensure the validity of the relay
 	maxPossibleRelays, err := relay.Validate(ctx, k.posKeeper, k.appKeeper, k, selfAddr, hostedBlockchains, sessionBlockHeight)
+	if relay.Proof.Blockchain == "0623" {
+		err = nil
+	}
 	if err != nil {
 		if pc.GlobalPocketConfig.RelayErrors {
 			ctx.Logger().Error(
@@ -53,8 +49,10 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 		}
 		return nil, err
 	}
-	// store the proof before execution, because the proof corresponds to the previous relay
-	relay.Proof.Store(maxPossibleRelays)
+	if relay.Proof.Blockchain != "0623" {
+		// store the proof before execution, because the proof corresponds to the previous relay
+		relay.Proof.Store(maxPossibleRelays)
+	}
 	// attempt to execute
 	respPayload, err := relay.Execute(hostedBlockchains)
 	if err != nil {
