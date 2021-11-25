@@ -558,8 +558,8 @@ func TestUpgrade(t *testing.T) {
 		memoryNodeFn func(t *testing.T, genesisState []byte) (tendermint *node.Node, keybase keys.Keybase, cleanup func())
 		*upgrades
 	}{
-		{name: "change complex type params from an amino account with amino codec", memoryNodeFn: NewInMemoryTendermintNodeAmino, upgrades: &upgrades{codecUpgrade{false, 7000}}},
-		{name: "change complex type params from a proto account with proto codec", memoryNodeFn: NewInMemoryTendermintNodeProto, upgrades: &upgrades{codecUpgrade{true, 2}}},
+		{name: "test upgrade with amino codec", memoryNodeFn: NewInMemoryTendermintNodeAmino, upgrades: &upgrades{codecUpgrade{false, 7000}}},
+		{name: "test upgrade with proto codec", memoryNodeFn: NewInMemoryTendermintNodeProto, upgrades: &upgrades{codecUpgrade{true, 2}}},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -576,7 +576,7 @@ func TestUpgrade(t *testing.T) {
 			<-evtChan // Wait for block
 			memCli, stopCli, evtChan := subscribeTo(t, tmTypes.EventTx)
 			tx, err = gov.UpgradeTx(memCodec(), memCli, kb, cb.GetAddress(), govTypes.Upgrade{
-				Height:  1000,
+				Height:  10,
 				Version: "2.0.0",
 			}, "test", 1000000, tc.codecUpgrade.upgradeMod)
 			assert.Nil(t, err)
@@ -586,6 +586,11 @@ func TestUpgrade(t *testing.T) {
 			u, err := PCA.QueryUpgrade(PCA.LastBlockHeight())
 			assert.Nil(t, err)
 			assert.True(t, u.UpgradeVersion() == "2.0.0")
+			if tc.upgrades.codecUpgrade.upgradeMod {
+				assert.Equal(t, codec.OldUpgradeHeight, tc.upgrades.codecUpgrade.height)
+			} else {
+				assert.Equal(t, codec.OldUpgradeHeight, int64(0))
+			}
 
 			cleanup()
 			stopCli()
