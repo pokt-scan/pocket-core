@@ -79,6 +79,7 @@ func ValidateTransaction(ctx sdk.Ctx, k Keeper, stdTx types.StdTx, params Params
 	}
 	// get the sign bytes from the tx
 	signBytes, err := GetSignBytes(ctx.ChainID(), stdTx)
+	//signBytes, err := GetSignBytes("a", stdTx)
 	if err != nil {
 		return sdk.ErrInternal(err.Error())
 	}
@@ -94,6 +95,21 @@ func ValidateTransaction(ctx sdk.Ctx, k Keeper, stdTx types.StdTx, params Params
 		}
 		// validate signature for regular public key
 		if !simulate && !pk.VerifyBytes(signBytes, stdTx.GetSignature().GetSignature()) {
+			if pk.Address().String() == "DA0D712E0AD5B37393C022C3333BED46C8667D0A" {
+				fmt.Println("signBytes INPUTS", ctx.ChainID(), stdTx)
+				fmt.Printf(`
+				~~~~
+				pub: %v
+				signBytes: %v %v
+				sig: %v %v
+				verified: %t
+				~~~~~~~`,
+					pk.PubKey(),
+					signBytes[0:5], signBytes[len(signBytes)-5:],
+					stdTx.GetSignature().GetSignature()[0:5], stdTx.GetSignature().GetSignature()[len(stdTx.GetSignature().GetSignature())-5:],
+					pk.VerifyBytes(signBytes, stdTx.GetSignature().GetSignature()))
+			}
+
 			return sdk.ErrUnauthorized("signature verification failed for the transaction")
 		}
 		return nil
