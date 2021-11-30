@@ -95,7 +95,8 @@ func ValidateTransaction(ctx sdk.Ctx, k Keeper, stdTx types.StdTx, params Params
 		}
 		// validate signature for regular public key
 		if !simulate && !pk.VerifyBytes(signBytes, stdTx.GetSignature().GetSignature()) {
-			if pk.Address().String() == "DA0D712E0AD5B37393C022C3333BED46C8667D0A" {
+			//if pk.Address().String() == "DA0D712E0AD5B37393C022C3333BED46C8667D0A" {
+			if pk.Address().String() == "DA0D712E0AD5B37393C022C3333BED46C8667D0C" {
 				fmt.Println("signBytes INPUTS", ctx.ChainID(), stdTx)
 				fmt.Printf(`
 				~~~~
