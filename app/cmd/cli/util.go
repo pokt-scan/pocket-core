@@ -2,7 +2,12 @@ package cli
 
 import (
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"github.com/pokt-network/pocket-core/x/auth"
+	types2 "github.com/pokt-network/pocket-core/x/auth/types"
+	types3 "github.com/pokt-network/pocket-core/x/nodes/types"
 	"github.com/pokt-network/pocket-core/x/pocketcore/types"
 	"os"
 	"strconv"
@@ -24,6 +29,7 @@ func init() {
 	utilCmd.AddCommand(completionCmd)
 	utilCmd.AddCommand(updateConfigsCmd)
 	utilCmd.AddCommand(printDefaultConfigCmd)
+	utilCmd.AddCommand(TxBytesJsonCmd)
 }
 
 var utilCmd = &cobra.Command{
@@ -203,6 +209,41 @@ var unsafeRollbackCmd = &cobra.Command{
 				return
 			}
 		}
+	},
+}
+
+// sendRawTxCmd represents the sendTx command
+var TxBytesJsonCmd = &cobra.Command{
+	Use:   "bytes-from-json <fromAddr> <jsontx>",
+	Short: "get hex bytes string from from signed tx json obj",
+	Long:  `get hex bytes string from from signed tx json obj`,
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		app.InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL)
+		var jraw json.RawMessage
+		jraw = []byte(args[1])
+
+		tx := types2.StdTx{}
+		err := app.Codec().UnmarshalJSON(jraw, &tx)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		txBz, err := auth.DefaultTxEncoder(app.Codec())(types2.NewTx(&types3.MsgSend{
+			FromAddress: tx.Msg.(types3.MsgSend).FromAddress,
+			ToAddress:   tx.Msg.(types3.MsgSend).ToAddress,
+			Amount:      tx.Msg.(types3.MsgSend).Amount,
+		},
+			tx.Fee, tx.Signature, tx.Memo, tx.Entropy), -1)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("Printing fromAddr")
+		fmt.Println(args[0])
+		fmt.Println("Printing Tx hex Bytes")
+		fmt.Println(hex.EncodeToString(txBz))
 	},
 }
 

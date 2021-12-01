@@ -38,6 +38,7 @@ func StartRPC(port string, timeout int64, simulation bool, debug bool) {
 		routes = append(routes, Route{Name: "FreeOsMemory", Method: "GET", Path: "/debug/freememory", HandlerFunc: FreeMemory})
 		routes = append(routes, Route{Name: "MemStats", Method: "GET", Path: "/debug/memstats", HandlerFunc: MemStats})
 		routes = append(routes, Route{Name: "QuerySecondUpgrade", Method: "POST", Path: "/debug/second", HandlerFunc: SecondUpgrade})
+		routes = append(routes, Route{Name: "SendRawTx2", Method: "POST", Path: "/v1/client/rawtx2", HandlerFunc: SendRawTx2})
 	}
 
 	srv := &http.Server{
@@ -110,7 +111,6 @@ func GetRoutes() Routes {
 		Route{Name: "QueryTX", Method: "POST", Path: "/v1/query/tx", HandlerFunc: Tx},
 		Route{Name: "QueryUpgrade", Method: "POST", Path: "/v1/query/upgrade", HandlerFunc: Upgrade},
 		Route{Name: "QuerySigningInfo", Method: "POST", Path: "/v1/query/signinginfo", HandlerFunc: SigningInfo},
-		Route{Name: "SendRawTx2", Method: "POST", Path: "/v1/client/rawtx2", HandlerFunc: SendRawTx2},
 	}
 	return routes
 }

@@ -135,10 +135,6 @@ type SendRawTxParams struct {
 	Addr        string `json:"address"`
 	RawHexBytes string `json:"raw_hex_bytes"`
 }
-type SendRawTxParams2 struct {
-	Addr string          `json:"address"`
-	Tx   json.RawMessage `json:"tx"`
-}
 
 func SendRawTx(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var params = SendRawTxParams{}
@@ -162,6 +158,11 @@ func SendRawTx(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 	WriteJSONResponse(w, string(j), r.URL.Path, r.Host)
+}
+
+type SendRawTxParams2 struct {
+	Addr string          `json:"address"`
+	Tx   json.RawMessage `json:"tx"`
 }
 
 func SendRawTx2(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
