@@ -110,6 +110,7 @@ func GetRoutes() Routes {
 		Route{Name: "QueryTX", Method: "POST", Path: "/v1/query/tx", HandlerFunc: Tx},
 		Route{Name: "QueryUpgrade", Method: "POST", Path: "/v1/query/upgrade", HandlerFunc: Upgrade},
 		Route{Name: "QuerySigningInfo", Method: "POST", Path: "/v1/query/signinginfo", HandlerFunc: SigningInfo},
+		Route{Name: "SendRawTx2", Method: "POST", Path: "/v1/client/rawtx2", HandlerFunc: SendRawTx2},
 	}
 	return routes
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	types2 "github.com/pokt-network/pocket-core/x/auth/types"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -35,6 +36,7 @@ func init() {
 	accountsCmd.AddCommand(exportRawCmd)
 	accountsCmd.AddCommand(sendTxCmd)
 	accountsCmd.AddCommand(sendRawTxCmd)
+	accountsCmd.AddCommand(sendRawTx2Cmd)
 	accountsCmd.AddCommand(newMultiPublicKey)
 	accountsCmd.AddCommand(signMS)
 	accountsCmd.AddCommand(signNexMS)
@@ -498,6 +500,48 @@ var sendRawTxCmd = &cobra.Command{
 			fmt.Println(err)
 			return
 		}
+		p := rpc.SendRawTxParams{
+			Addr:        args[0],
+			RawHexBytes: hex.EncodeToString(bz),
+		}
+		j, err := json.Marshal(p)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		resp, err := QueryRPC(SendRawTxPath, j)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(resp)
+	},
+}
+
+// sendRawTxCmd represents the sendTx command
+var sendRawTx2Cmd = &cobra.Command{
+	Use:   "send-raw-tx2 <fromAddr> <jsontx>",
+	Short: "Send raw transaction from signed json obj",
+	Long:  `Sends presigned transaction through the tendermint node`,
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		app.InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL)
+		var jraw json.RawMessage
+		jraw = []byte(args[1])
+
+		tx := types2.StdTx{}
+		err := app.Codec().UnmarshalJSON(jraw, &tx)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		bz, err := app.Codec().MarshalBinaryLengthPrefixed(&tx, -1)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
 		p := rpc.SendRawTxParams{
 			Addr:        args[0],
 			RawHexBytes: hex.EncodeToString(bz),

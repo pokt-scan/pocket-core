@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/pokt-network/pocket-core/x/auth"
+	authTypes "github.com/pokt-network/pocket-core/x/auth/types"
+	types2 "github.com/pokt-network/pocket-core/x/nodes/types"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -132,6 +135,10 @@ type SendRawTxParams struct {
 	Addr        string `json:"address"`
 	RawHexBytes string `json:"raw_hex_bytes"`
 }
+type SendRawTxParams2 struct {
+	Addr string          `json:"address"`
+	Tx   json.RawMessage `json:"tx"`
+}
 
 func SendRawTx(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var params = SendRawTxParams{}
@@ -145,6 +152,42 @@ func SendRawTx(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		return
 	}
 	res, err := app.PCA.SendRawTx(params.Addr, bz)
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+		return
+	}
+	j, er := app.Codec().MarshalJSON(res)
+	if er != nil {
+		WriteErrorResponse(w, 400, er.Error())
+		return
+	}
+	WriteJSONResponse(w, string(j), r.URL.Path, r.Host)
+}
+
+func SendRawTx2(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var params = SendRawTxParams2{}
+	if err := PopModel(w, r, ps, &params); err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+		return
+	}
+	var t auth.StdTx
+	err := app.Codec().UnmarshalJSON(params.Tx, &t)
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+		return
+	}
+
+	txBz, err := auth.DefaultTxEncoder(app.Codec())(authTypes.NewTx(&types2.MsgSend{
+		FromAddress: t.Msg.(types2.MsgSend).FromAddress,
+		ToAddress:   t.Msg.(types2.MsgSend).ToAddress,
+		Amount:      t.Msg.(types2.MsgSend).Amount,
+	},
+		t.Fee, t.Signature, t.Memo, t.Entropy), app.PCA.LastBlockHeight())
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+		return
+	}
+	res, err := app.PCA.SendRawTx(params.Addr, txBz)
 	if err != nil {
 		WriteErrorResponse(w, 400, err.Error())
 		return

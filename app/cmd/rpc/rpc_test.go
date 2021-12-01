@@ -1092,6 +1092,77 @@ func TestRPC_RawTX(t *testing.T) {
 	stopCli()
 }
 
+func TestRPC_RawTX2(t *testing.T) {
+	codec.UpgradeHeight = 7000
+	_, kb, cleanup := NewInMemoryTendermintNode(t, oneValTwoNodeGenesisState())
+	cb, err := kb.GetCoinbase()
+	assert.Nil(t, err)
+	kp, err := kb.Create("test")
+	assert.Nil(t, err)
+	pk, err := kb.ExportPrivateKeyObject(cb.GetAddress(), "test")
+	assert.Nil(t, err)
+	_, stopCli, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
+	// create the transaction
+	tra := authTypes.NewTestTx(types.Context{}.WithChainID("pocket-test"),
+		&types2.MsgSend{
+			FromAddress: cb.GetAddress(),
+			ToAddress:   kp.GetAddress(),
+			Amount:      types.NewInt(1),
+		},
+		pk,
+		rand2.Int64(),
+		types.NewCoins(types.NewCoin(types.DefaultStakeDenom, types.NewInt(100000))))
+	assert.NotNil(t, tra)
+
+	_ = memCodecMod(true)
+	tra2 := authTypes.NewTestTx(types.Context{}.WithChainID("pocket-test"),
+		&types2.MsgSend{
+			FromAddress: cb.GetAddress(),
+			ToAddress:   kp.GetAddress(),
+			Amount:      types.NewInt(2),
+		},
+		pk,
+		rand2.Int64(),
+		types.NewCoins(types.NewCoin(types.DefaultStakeDenom, types.NewInt(100000))))
+	assert.NotNil(t, tra2)
+	<-evtChan // Wait for block
+	tx, _ := memCodec().MarshalJSON(tra.(auth.StdTx))
+	params := SendRawTxParams2{
+		Addr: cb.GetAddress().String(),
+		Tx:   tx,
+	}
+	q := newClientRequest("rawtx2", newBody(params))
+	rec := httptest.NewRecorder()
+	SendRawTx2(rec, q, httprouter.Params{})
+	resp := getResponse(rec)
+	assert.Nil(t, err)
+	assert.NotNil(t, resp)
+	var response types.TxResponse
+	err = memCodec().UnmarshalJSON([]byte(resp), &response)
+	assert.Nil(t, err)
+	assert.Equal(t, uint32(0), response.Code)
+
+	<-evtChan // Wait for block
+	tx2, _ := memCodec().MarshalJSON(tra.(auth.StdTx))
+	params = SendRawTxParams2{
+		Addr: cb.GetAddress().String(),
+		Tx:   tx2,
+	}
+	q2 := newClientRequest("rawtx2", newBody(params))
+	rec2 := httptest.NewRecorder()
+	SendRawTx2(rec2, q2, httprouter.Params{})
+	resp2 := getResponse(rec2)
+	assert.Nil(t, err)
+	assert.NotNil(t, resp2)
+	var response2 types.TxResponse
+	err = memCodec().UnmarshalJSON([]byte(resp2), &response2)
+	assert.Nil(t, err)
+	assert.Nil(t, response2.Logs)
+
+	cleanup()
+	stopCli()
+}
+
 func TestRPC_QueryNodeClaims(t *testing.T) {
 	codec.UpgradeHeight = 7000
 	_, _, cleanup := NewInMemoryTendermintNode(t, oneValTwoNodeGenesisState())
