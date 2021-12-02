@@ -30,6 +30,7 @@ func init() {
 	utilCmd.AddCommand(updateConfigsCmd)
 	utilCmd.AddCommand(printDefaultConfigCmd)
 	utilCmd.AddCommand(TxBytesJsonCmd)
+	utilCmd.AddCommand(MsgToHexString)
 }
 
 var utilCmd = &cobra.Command{
@@ -212,11 +213,10 @@ var unsafeRollbackCmd = &cobra.Command{
 	},
 }
 
-// sendRawTxCmd represents the sendTx command
 var TxBytesJsonCmd = &cobra.Command{
-	Use:   "bytes-from-json <fromAddr> <jsontx>",
-	Short: "get hex bytes string from from signed tx json obj",
-	Long:  `get hex bytes string from from signed tx json obj`,
+	Use:   "jsontx-to-hex <fromAddr> <EscapedJsonTxObj>",
+	Short: "get hex bytes string from signed tx json obj",
+	Long:  `get hex bytes string from signed tx json obj`,
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		app.InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL)
@@ -244,6 +244,25 @@ var TxBytesJsonCmd = &cobra.Command{
 		fmt.Println(args[0])
 		fmt.Println("Printing Tx hex Bytes")
 		fmt.Println(hex.EncodeToString(txBz))
+	},
+}
+
+var MsgToHexString = &cobra.Command{
+	Use:   "jsonmsg-to-hex <EscapedJsonObj>",
+	Short: "get hex bytes from from json obj",
+	Long:  `get hex bytes from from json obj`,
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		app.InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL)
+		var jraw json.RawMessage
+		jraw = []byte(args[0])
+
+		hs := hex.EncodeToString(jraw)
+
+		fmt.Println("Printing original msg")
+		fmt.Println(string(jraw))
+		fmt.Println("Printing hex Bytes")
+		fmt.Println(hs)
 	},
 }
 
