@@ -20,8 +20,9 @@ var _ types.CommitMultiStore = (*MultiStore)(nil)
 const stateDBFolder = "app-state"
 
 type MultiStore struct {
-	AppDB        dbm.DB                               // application db, contains everything but the state
-	stateDir     string                               // path to statedb folder
+	AppDB        dbm.DB // application db, contains everything but the state
+	stateDir     string // path to statedb folder
+	baseDatadir  string // Path to the data dir
 	stores       map[types.StoreKey]types.CommitStore // prefixed abstractions; living inside appDB
 	lastCommitID types.CommitID                       // lastCommitID from the IAVL
 	pruneDepth   int64                                // -1 is off
@@ -29,10 +30,11 @@ type MultiStore struct {
 
 func NewMultiStore(appDB dbm.DB, datadir string, pruneDepth int64) *MultiStore {
 	return &MultiStore{
-		AppDB:      appDB,
-		stateDir:   datadir + string(filepath.Separator) + stateDBFolder,
-		stores:     make(map[types.StoreKey]types.CommitStore),
-		pruneDepth: pruneDepth,
+		AppDB:       appDB,
+		baseDatadir: datadir + string(filepath.Separator) + "data",
+		stateDir:    datadir + string(filepath.Separator) + stateDBFolder,
+		stores:      make(map[types.StoreKey]types.CommitStore),
+		pruneDepth:  pruneDepth,
 	}
 }
 
@@ -45,7 +47,7 @@ func (rs *MultiStore) LoadLatestVersion() error {
 	// if genesis
 	if latestHeight == 0 {
 		for key := range rs.stores {
-			store := NewStore(rs.AppDB, latestHeight, key.Name(), types.CommitID{}, rs.stateDir, true)
+			store := NewStore(rs.AppDB, latestHeight, key.Name(), types.CommitID{}, rs.stateDir, rs.baseDatadir, true, 0)
 			rs.stores[key] = store
 		}
 		return nil
@@ -63,7 +65,7 @@ func (rs *MultiStore) LoadLatestVersion() error {
 	}
 	// create new mutable store
 	for key := range rs.stores {
-		rs.stores[key] = NewStore(rs.AppDB, latestHeight, key.Name(), infos[key.Name()].Core.CommitID, rs.stateDir, true)
+		rs.stores[key] = NewStore(rs.AppDB, latestHeight, key.Name(), infos[key.Name()].Core.CommitID, rs.stateDir, rs.baseDatadir, true, 0)
 	}
 	return nil
 }
@@ -75,16 +77,16 @@ func (rs *MultiStore) LoadImmutableVersion(height int64) (*types.Store, error) {
 		return rs.CopyStore(), nil
 	}
 	// ensure not pruned
-	if rs.Pruning() {
-		oldestHeight := rs.lastCommitID.Version - int64(rs.pruneDepth)
-		if height < oldestHeight {
-			return nil, fmt.Errorf("unable to get version %d heights before %d are pruned", height, oldestHeight)
-		}
-	}
+	//if rs.Pruning() {
+	//	oldestHeight := rs.lastCommitID.Version - int64(rs.pruneDepth)
+	//	if height < oldestHeight {
+	//		return nil, fmt.Errorf("unable to get version %d heights before %d are pruned", height, oldestHeight)
+	//	}
+	//}
 	// load immutable from previous stores
 	prevStores := make(map[types.StoreKey]types.CommitStore)
 	for k, store := range rs.stores {
-		prevStores[k] = store.(*Store).LoadImmutableVersion(height, rs.stateDir)
+		prevStores[k] = store.(*Store).LoadImmutableVersion(height, rs.stateDir, rs.baseDatadir, rs.lastCommitID.Version)
 	}
 	// create struct & return
 	ms := types.Store(&MultiStore{

@@ -4,21 +4,26 @@ import (
 	"fmt"
 	"github.com/pokt-network/pocket-core/store/cachemulti"
 	"github.com/pokt-network/pocket-core/store/iavl"
+	"github.com/pokt-network/pocket-core/store/rootmulti/appstatedb"
 	"github.com/pokt-network/pocket-core/store/types"
 	dbm "github.com/tendermint/tm-db"
+	"log"
 )
 
 // Prefixed abstractions living inside AppDB;
 type Store struct {
-	appDB     dbm.DB      // parent db, (where everything lives except for state)
-	state     dbm.DB      // ephemeral state used to 'stage' potential changes; only latest height; nuked on startup;
-	iavl      *iavl.Store // used for latest height state commitments ONLY; may be pruned;
-	storeKey  string      // constant; part of the prefix
-	height    int64       // dynamic; part of the prefix
-	isMutable bool        // !isReadOnly
+	asdb                  *appstatedb.AppStateDB // Inmutable app state database
+	appDB                 dbm.DB                 // parent db, (where everything lives except for state)
+	state                 dbm.DB                 // ephemeral state used to 'stage' potential changes; only latest height; nuked on startup;
+	iavl                  *iavl.Store            // used for latest height state commitments ONLY; may be pruned;
+	storeKey              string                 // constant; part of the prefix
+	height                int64                  // dynamic; part of the prefix
+	isMutable             bool                   // !isReadOnly
+	immutableLatestHeight int64                  // READ ONLY IMMUTABLE LATEST KNOWN HEIGHT
+	pruneDepth            int64
 }
 
-func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.CommitID, stateDir string, isMutable bool) *Store {
+func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.CommitID, stateDir string, baseDatadir string, isMutable bool, immutableLatestHeight int64) *Store {
 	store := &Store{
 		appDB:     appDB,
 		storeKey:  storeKey,
@@ -49,34 +54,81 @@ func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.Commit
 			panic("unable to load iavlStore in rootmultistore: " + err.Error())
 		}
 	}
+	
+	// Load the app state db for this store
+	asdb, asdbErr := appstatedb.NewAppStateDB(baseDatadir, storeKey)
+	if asdbErr != nil {
+		panic("Unable to load app statedb in store: " + asdbErr.Error())
+	}
+	store.asdb = asdb
+
 	return store
 }
 
-func (is *Store) LoadImmutableVersion(version int64, stateDir string) *Store {
-	return NewStore(is.appDB, version, is.storeKey, types.CommitID{}, stateDir, false)
+func (is *Store) getLatestHeight() int64 {
+	if is.isMutable {
+		return is.height
+	} else {
+		return is.immutableLatestHeight
+	}
+}
+
+func (is *Store) isHistoricalQuery() bool {
+	if is.isMutable {
+		panic("Shouldn't be called if mutable")
+	}
+
+	return is.getLatestHeight()-is.pruneDepth < is.height
+}
+
+func (is *Store) LoadImmutableVersion(version int64, stateDir string, baseDatadir string, immutableLatestHeight int64) *Store {
+	return NewStore(is.appDB, version, is.storeKey, types.CommitID{}, stateDir, baseDatadir, false, immutableLatestHeight)
 }
 
 func (is *Store) Get(key []byte) ([]byte, error) {
 	if is.isMutable { // if latestHeight
 		return is.state.Get(key)
 	}
-	return is.appDB.Get(StoreKey(is.height-1, is.storeKey, string(key)))
+
+	if is.isHistoricalQuery() {
+		return is.asdb.GetMutable(is.height-1, is.storeKey, key)
+	} else {
+		return is.appDB.Get(StoreKey(is.height-1, is.storeKey, string(key)))
+	}
 }
 
 func (is *Store) Has(key []byte) (bool, error) {
 	if is.isMutable { // if latestHeight
 		return is.state.Has(key)
 	}
-	return is.appDB.Has(StoreKey(is.height-1, is.storeKey, string(key)))
+
+	if is.isHistoricalQuery() {
+		return is.asdb.HasMutable(is.height-1, is.storeKey, key)
+	} else {
+		return is.appDB.Has(StoreKey(is.height-1, is.storeKey, string(key)))
+	}
 }
 
 func (is *Store) Set(key, value []byte) error {
 	if is.isMutable {
+		// Set the Iavl
 		err := is.iavl.Set(key, value)
 		if err != nil {
 			panic("unable to set to iavl: " + err.Error())
 		}
-		return is.state.Set(key, value)
+
+		// Set the state db
+		stateErr := is.state.Set(key, value)
+		if stateErr != nil {
+			panic("unable to set state: " + stateErr.Error())
+		}
+
+		// Return with the historical set
+		asdbErr := is.asdb.SetMutable(is.height, is.storeKey, key, value)
+		if asdbErr != nil {
+			panic("unable to set to asdb: " + asdbErr.Error())
+		}
+		return asdbErr
 	}
 	panic("'Set()' called on immutable store")
 }
@@ -87,7 +139,18 @@ func (is *Store) Delete(key []byte) error {
 		if err != nil {
 			panic("unable to delete to iavl: " + err.Error())
 		}
-		return is.state.Delete(key)
+		// Delete the state db
+		stateErr := is.state.Delete(key)
+		if stateErr != nil {
+			panic("unable to set state: " + stateErr.Error())
+		}
+
+		// Return with the historical delete
+		asdbErr := is.asdb.DeleteMutable(is.height, is.storeKey, key)
+		if asdbErr != nil {
+			panic("unable to set to asdb: " + asdbErr.Error())
+		}
+		return asdbErr
 	}
 	panic("'Delete()' called on immutable store")
 }
@@ -96,16 +159,26 @@ func (is *Store) Iterator(start, end []byte) (types.Iterator, error) {
 	if is.isMutable {
 		return is.state.Iterator(start, end)
 	}
-	baseIterator, err := is.appDB.Iterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
-	return AppDBIterator{it: baseIterator}, err
+
+	if is.isHistoricalQuery() {
+		return is.asdb.IteratorMutable(is.height - 1, is.storeKey, start, end)
+	} else {
+		baseIterator, err := is.appDB.Iterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
+		return AppDBIterator{it: baseIterator}, err
+	}
+
 }
 
 func (is *Store) ReverseIterator(start, end []byte) (types.Iterator, error) {
 	if is.isMutable {
 		return is.state.ReverseIterator(start, end)
 	}
-	baseIterator, err := is.appDB.ReverseIterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
-	return AppDBIterator{it: baseIterator}, err
+	if is.isHistoricalQuery() {
+		return is.asdb.ReverseIteratorMutable(is.height - 1, is.storeKey, start, end)
+	} else {
+		baseIterator, err := is.appDB.ReverseIterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
+		return AppDBIterator{it: baseIterator}, err
+	}
 }
 
 // Persist State & IAVL
@@ -121,7 +194,19 @@ func (is *Store) CommitBatch(b dbm.Batch) (commitID types.CommitID, batch dbm.Ba
 	for ; it.Valid(); it.Next() {
 		b.Set(StoreKey(is.height, is.storeKey, string(it.Key())), it.Value())
 	}
+
+	// Commit to the historical db (asdb)
+	commitErr := is.asdb.CommitMutable()
+	if commitErr != nil {
+		panic(commitErr.Error())
+	}
+
 	is.height++
+
+	if is.height >= 300 {
+		log.Fatal("TELMINAMO")
+	}
+
 	return commitID, b
 }
 

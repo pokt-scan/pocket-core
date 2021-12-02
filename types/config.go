@@ -76,7 +76,7 @@ const (
 	DefaultTxIndexTags                 = "tx.hash,tx.height,message.sender,transfer.recipient"
 	ConfigDirName                      = "config"
 	ConfigFileName                     = "config.json"
-	ApplicationDBName                  = "application"
+	ApplicationDBName                  = "appstateiavl"
 	TransactionIndexerDBName           = "txindexer"
 	PlaceholderHash                    = "0001"
 	PlaceholderURL                     = "http://127.0.0.1:8081"

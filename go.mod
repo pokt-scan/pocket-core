@@ -9,6 +9,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jordanorelli/lexnum v0.0.0-20141216151731-460eeb125754
 	github.com/julienschmidt/httprouter v1.3.0
+	github.com/mattn/go-sqlite3 v1.14.8
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.5.1
 	github.com/regen-network/cosmos-proto v0.3.0
@@ -28,4 +29,5 @@ require (
 )
 
 replace github.com/tendermint/tendermint => github.com/pokt-network/tendermint v0.32.11-0.20210702160503-ae429fe84ffe
+
 replace github.com/tendermint/tm-db => github.com/pokt-network/tm-db v0.5.2-0.20210901185636-199451fd4c25

@@ -123,7 +123,7 @@ func NewBaseApp(name string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecod
 		name:           name,
 		db:             db,
 		cdc:            cdc,
-		cms:            rootmulti.NewMultiStore(db, datadir, 20000),
+		cms:            rootmulti.NewMultiStore(db, datadir, 101),
 		router:         NewRouter(),
 		queryRouter:    NewQueryRouter(),
 		txDecoder:      txDecoder,
