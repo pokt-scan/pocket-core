@@ -93,10 +93,13 @@ var decodeTxCmd = &cobra.Command{
 			height = 0
 		}
 		stdTx := app.UnmarshalTxStr(txStr, height)
+		json, _ := app.Codec().MarshalJSON(stdTx)
 		fmt.Printf(
 			"Type:\t\t%s\nMsg:\t\t%v\nFee:\t\t%s\nEntropy:\t%d\nMemo:\t\t%s\nSigner\t\t%s\nSig:\t\t%s\n",
 			stdTx.GetMsg().Type(), stdTx.GetMsg(), stdTx.GetFee().String(), stdTx.GetEntropy(), stdTx.GetMemo(), stdTx.GetMsg().GetSigner().String(),
 			stdTx.GetSignature().GetPublicKey())
+		fmt.Print("Json:\t\t")
+		fmt.Println(string(json))
 	},
 }
 
