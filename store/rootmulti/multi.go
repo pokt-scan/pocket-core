@@ -18,6 +18,7 @@ import (
 var _ types.CommitMultiStore = (*MultiStore)(nil)
 
 const stateDBFolder = "app-state"
+const dataFolder = "data"
 
 type MultiStore struct {
 	AppDB        dbm.DB // application db, contains everything but the state
@@ -31,8 +32,8 @@ type MultiStore struct {
 func NewMultiStore(appDB dbm.DB, datadir string, pruneDepth int64) *MultiStore {
 	return &MultiStore{
 		AppDB:       appDB,
-		baseDatadir: datadir + string(filepath.Separator) + "data",
-		stateDir:    datadir + string(filepath.Separator) + stateDBFolder,
+		baseDatadir: datadir + string(filepath.Separator) + dataFolder,
+		stateDir:    datadir + string(filepath.Separator) + dataFolder + string(filepath.Separator) + stateDBFolder,
 		stores:      make(map[types.StoreKey]types.CommitStore),
 		pruneDepth:  pruneDepth,
 	}
@@ -47,7 +48,7 @@ func (rs *MultiStore) LoadLatestVersion() error {
 	// if genesis
 	if latestHeight == 0 {
 		for key := range rs.stores {
-			store := NewStore(rs.AppDB, latestHeight, key.Name(), types.CommitID{}, rs.stateDir, rs.baseDatadir, true, 0)
+			store := NewStore(rs.AppDB, latestHeight, key.Name(), types.CommitID{}, rs.stateDir, rs.baseDatadir, true, 0, rs.pruneDepth)
 			rs.stores[key] = store
 		}
 		return nil
@@ -65,7 +66,7 @@ func (rs *MultiStore) LoadLatestVersion() error {
 	}
 	// create new mutable store
 	for key := range rs.stores {
-		rs.stores[key] = NewStore(rs.AppDB, latestHeight, key.Name(), infos[key.Name()].Core.CommitID, rs.stateDir, rs.baseDatadir, true, 0)
+		rs.stores[key] = NewStore(rs.AppDB, latestHeight, key.Name(), infos[key.Name()].Core.CommitID, rs.stateDir, rs.baseDatadir, true, 0, rs.pruneDepth)
 	}
 	return nil
 }
@@ -86,7 +87,7 @@ func (rs *MultiStore) LoadImmutableVersion(height int64) (*types.Store, error) {
 	// load immutable from previous stores
 	prevStores := make(map[types.StoreKey]types.CommitStore)
 	for k, store := range rs.stores {
-		prevStores[k] = store.(*Store).LoadImmutableVersion(height, rs.stateDir, rs.baseDatadir, rs.lastCommitID.Version)
+		prevStores[k] = store.(*Store).LoadImmutableVersion(height, rs.stateDir, rs.baseDatadir, rs.lastCommitID.Version, rs.pruneDepth)
 	}
 	// create struct & return
 	ms := types.Store(&MultiStore{

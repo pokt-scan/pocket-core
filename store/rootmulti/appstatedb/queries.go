@@ -2,11 +2,10 @@ package appstatedb
 
 //language=SQL
 const GetQuery = `
-SELECT value
+SELECT iif(deleted_at < %d, null, value)
   FROM %s
  WHERE key = X'%s' AND
-       height <= %d AND
-       deleted_at > %d
+       height <= %d
 ORDER BY height DESC
 LIMIT 1
 `
@@ -21,11 +20,10 @@ const DeleteStatement = `
 UPDATE %s
    SET deleted_at = %d
  WHERE (key, height) IN (
- SELECT key, height
+ SELECT iif(deleted_at < %d, null, key), iif(deleted_at < %d, null, height)
   FROM %s
  WHERE key = X'%s' AND
-       height <= %d AND
-       deleted_at > %d
+       height <= %d
 ORDER BY height DESC
 LIMIT 1
  )

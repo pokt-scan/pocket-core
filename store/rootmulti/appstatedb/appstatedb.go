@@ -176,6 +176,11 @@ func logAndReturn(log string) string {
 	return log
 }
 
+func (asdb *AppStateDB) GetMutableStmt(height int64, table string, key []byte) string {
+	hexKey := strings.ToUpper(hex.EncodeToString(key))
+	return strings.ReplaceAll(fmt.Sprintf(GetQuery, height, table, hexKey, height), "\n", " ")
+}
+
 func (asdb *AppStateDB) GetMutable(height int64, table string, key []byte) ([]byte, error) {
 	defer timeTrack(time.Now(), fmt.Sprintf("Get Mutable"))
 	//asdb.mu.Lock()
@@ -196,20 +201,25 @@ func (asdb *AppStateDB) GetMutable(height int64, table string, key []byte) ([]by
 	//defer queryStmt.Close()
 
 	// Prepare the query
-	hexKey := strings.ToUpper(hex.EncodeToString(key))
+
 
 	// Execute the query
-	var result string
-	queryError := tx.QueryRow(logAndReturn(fmt.Sprintf(GetQuery, table, hexKey, height, height))).Scan(&result)
+	var result sql.NullString
+	queryError := tx.QueryRow(asdb.GetMutableStmt(height, table, key)).Scan(&result)
+	//queryError := tx.QueryRow(logAndReturn(fmt.Sprintf(GetQuery, height, table, hexKey, height))).Scan(&result)
 	// Check for empty result
 	if queryError == sql.ErrNoRows {
+		return nil, nil
+	}
+	// Check for nil result
+	if !result.Valid {
 		return nil, nil
 	}
 	// Check for other error types
 	if queryError != nil {
 		return nil, queryError
 	}
-	return []byte(result), nil
+	return []byte(result.String), nil
 }
 
 // Set interface
@@ -237,6 +247,12 @@ func (asdb *AppStateDB) GetMutable(height int64, table string, key []byte) ([]by
 //	return nil
 //}
 
+func (asdb *AppStateDB) SetMutableStmt(height int64, table string, key, value []byte) string {
+	hexKey := strings.ToUpper(hex.EncodeToString(key))
+	hexValue := strings.ToUpper(hex.EncodeToString(value))
+	return strings.ReplaceAll(fmt.Sprintf(InsertStatement, table, height, hexKey, hexValue), "\n", " ")
+}
+
 func (asdb *AppStateDB) SetMutable(height int64, table string, key, value []byte) error {
 	defer timeTrack(time.Now(), fmt.Sprintf("Set Mutable"))
 	//asdb.mu.Lock()
@@ -249,9 +265,7 @@ func (asdb *AppStateDB) SetMutable(height int64, table string, key, value []byte
 	}
 
 	// Execute the insert statement
-	hexKey := strings.ToUpper(hex.EncodeToString(key))
-	hexValue := strings.ToUpper(hex.EncodeToString(value))
-	result, insertExecErr := tx.Exec(logAndReturn(fmt.Sprintf(InsertStatement, table, height, hexKey, hexValue)))
+	result, insertExecErr := tx.Exec(asdb.SetMutableStmt(height, table, key, value))//tx.Exec(logAndReturn(fmt.Sprintf(InsertStatement, table, height, hexKey, hexValue)))
 	if insertExecErr != nil {
 		return insertExecErr
 	}
@@ -261,7 +275,7 @@ func (asdb *AppStateDB) SetMutable(height int64, table string, key, value []byte
 		panic(rowsAffErr.Error())
 	}
 
-	if rowsAff != 1 {
+	if rowsAff > 1 {
 		return errors.New(fmt.Sprintf("Affected rows on set > 1 %d", rowsAff))
 	}
 
@@ -302,6 +316,11 @@ func (asdb *AppStateDB) SetMutable(height int64, table string, key, value []byte
 //	return nil
 //}
 
+func (asdb *AppStateDB) DeleteMutableStmt(height int64, table string, key []byte) string {
+	hexKey := strings.ToUpper(hex.EncodeToString(key))
+	return strings.ReplaceAll(fmt.Sprintf(DeleteStatement, table, height, height, height, table, hexKey, height), "\n", " ")
+}
+
 func (asdb *AppStateDB) DeleteMutable(height int64, table string, key []byte) error {
 	defer timeTrack(time.Now(), fmt.Sprintf("Delete Mutable"))
 	//asdb.mu.Lock()
@@ -321,9 +340,13 @@ func (asdb *AppStateDB) DeleteMutable(height int64, table string, key []byte) er
 	//defer deleteStmt.Close()
 
 	// Prepare the delete statement
-	hexKey := strings.ToUpper(hex.EncodeToString(key))
+	//hexKey := strings.ToUpper(hex.EncodeToString(key))
+	//if hexKey == "706F732F426C6F636B7350657253657373696F6E" {
+	//	fmt.Println("LLEGAMO")
+	//}
 	// Execute the delete statement
-	delResult, deleteExecErr := tx.Exec(logAndReturn(fmt.Sprintf(DeleteStatement, table, height, table, hexKey, height, height)))
+	delResult, deleteExecErr := tx.Exec(asdb.DeleteMutableStmt(height, table, key))
+	//delResult, deleteExecErr := tx.Exec(logAndReturn(fmt.Sprintf(DeleteStatement, table, height, height, height, table, hexKey, height)))
 	if deleteExecErr != nil {
 		return deleteExecErr
 	}
@@ -333,7 +356,7 @@ func (asdb *AppStateDB) DeleteMutable(height int64, table string, key []byte) er
 		return delResultRowsAffectedErr
 	}
 
-	if delResultRowsAffected != 1 {
+	if delResultRowsAffected > 1 {
 		return errors.New(fmt.Sprintf("Affected rows on delete != 1 %d", delResultRowsAffected))
 	}
 
@@ -358,6 +381,18 @@ func (itor iteratorOrder) String() string {
 	return "ASC"
 }
 
+func (asdb *AppStateDB) iteratorMutableSortedStmt(height int64, table string, start, end []byte, order iteratorOrder) string {
+	var iteratorQueryStr string
+	if start == nil && end == nil {
+		iteratorQueryStr = fmt.Sprintf(IteratorAllQuery, table, height, height, order.String())
+	} else {
+		hexStart := strings.ToUpper(hex.EncodeToString(start))
+		hexEnd := strings.ToUpper(hex.EncodeToString(end))
+		iteratorQueryStr = fmt.Sprintf(IteratorQuery, table, height, hexStart, hexEnd, height, order.String())
+	}
+	return strings.ReplaceAll(iteratorQueryStr, "\n", " ")
+}
+
 func (asdb *AppStateDB) iteratorMutableSorted(height int64, table string, start, end []byte, order iteratorOrder) (dbm.Iterator, error) {
 	defer timeTrack(time.Now(), fmt.Sprintf("Iterator Mutable with order %s", order.String()))
 	//asdb.mu.Lock()
@@ -369,14 +404,14 @@ func (asdb *AppStateDB) iteratorMutableSorted(height int64, table string, start,
 	}
 
 	// Prepare the query
-	var iteratorQueryStr string
-	if start == nil && end == nil {
-		iteratorQueryStr = fmt.Sprintf(IteratorAllQuery, table, height, height, order.String())
-	} else {
-		hexStart := strings.ToUpper(hex.EncodeToString(start))
-		hexEnd := strings.ToUpper(hex.EncodeToString(end))
-		iteratorQueryStr = fmt.Sprintf(IteratorQuery, table, height, hexStart, hexEnd, height, order.String())
-	}
+	iteratorQueryStr := asdb.iteratorMutableSortedStmt(height, table, start, end, order)
+	//if start == nil && end == nil {
+	//	iteratorQueryStr = fmt.Sprintf(IteratorAllQuery, table, height, height, order.String())
+	//} else {
+	//	hexStart := strings.ToUpper(hex.EncodeToString(start))
+	//	hexEnd := strings.ToUpper(hex.EncodeToString(end))
+	//	iteratorQueryStr = fmt.Sprintf(IteratorQuery, table, height, hexStart, hexEnd, height, order.String())
+	//}
 
 	//queryStmt, queryStmtErr := tx.Prepare(logAndReturn(iteratorQueryStr))
 	//if queryStmtErr != nil {
@@ -428,6 +463,10 @@ func (asdb *AppStateDB) iteratorMutableSorted(height int64, table string, start,
 //	return asdb.iteratorSorted(height, table, start, end, Ascending)
 //}
 
+func (asdb *AppStateDB) IteratorMutableStmt(height int64, table string, start, end []byte) string {
+	return asdb.iteratorMutableSortedStmt(height, table, start, end, Ascending)
+}
+
 func (asdb *AppStateDB) IteratorMutable(height int64, table string, start, end []byte) (dbm.Iterator, error) {
 	return asdb.iteratorMutableSorted(height, table, start, end, Ascending)
 }
@@ -435,6 +474,10 @@ func (asdb *AppStateDB) IteratorMutable(height int64, table string, start, end [
 //func (asdb *AppStateDB) ReverseIterator(height int64, table string, start, end []byte) (dbm.Iterator, error) {
 //	return asdb.iteratorSorted(height, table, start, end, Descending)
 //}
+
+func (asdb *AppStateDB) ReverseIteratorMutableStmt(height int64, table string, start, end []byte) string {
+	return asdb.iteratorMutableSortedStmt(height, table, start, end, Descending)
+}
 
 func (asdb *AppStateDB) ReverseIteratorMutable(height int64, table string, start, end []byte) (dbm.Iterator, error) {
 	return asdb.iteratorMutableSorted(height, table, start, end, Descending)

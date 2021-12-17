@@ -1,13 +1,18 @@
 package rootmulti
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"github.com/pokt-network/pocket-core/store"
 	"github.com/pokt-network/pocket-core/store/cachemulti"
 	"github.com/pokt-network/pocket-core/store/iavl"
 	"github.com/pokt-network/pocket-core/store/rootmulti/appstatedb"
 	"github.com/pokt-network/pocket-core/store/types"
 	dbm "github.com/tendermint/tm-db"
 	"log"
+	"time"
 )
 
 // Prefixed abstractions living inside AppDB;
@@ -21,14 +26,19 @@ type Store struct {
 	isMutable             bool                   // !isReadOnly
 	immutableLatestHeight int64                  // READ ONLY IMMUTABLE LATEST KNOWN HEIGHT
 	pruneDepth            int64
+	debug                 bool
+	hasCommitted          bool
 }
 
-func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.CommitID, stateDir string, baseDatadir string, isMutable bool, immutableLatestHeight int64) *Store {
+func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.CommitID, stateDir string, baseDatadir string, isMutable bool, immutableLatestHeight int64, pruneDepth int64) *Store {
 	store := &Store{
-		appDB:     appDB,
-		storeKey:  storeKey,
-		isMutable: isMutable,
-		height:    height,
+		appDB:                 appDB,
+		storeKey:              storeKey,
+		isMutable:             isMutable,
+		height:                height,
+		debug:                 true,
+		immutableLatestHeight: immutableLatestHeight,
+		pruneDepth:            pruneDepth,
 	}
 	if isMutable {
 		// load height-1 into state from AppDB
@@ -54,7 +64,7 @@ func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.Commit
 			panic("unable to load iavlStore in rootmultistore: " + err.Error())
 		}
 	}
-	
+
 	// Load the app state db for this store
 	asdb, asdbErr := appstatedb.NewAppStateDB(baseDatadir, storeKey)
 	if asdbErr != nil {
@@ -77,26 +87,70 @@ func (is *Store) isHistoricalQuery() bool {
 	if is.isMutable {
 		panic("Shouldn't be called if mutable")
 	}
-
-	return is.getLatestHeight()-is.pruneDepth < is.height
+	return is.height < is.getLatestHeight()-is.pruneDepth
 }
 
-func (is *Store) LoadImmutableVersion(version int64, stateDir string, baseDatadir string, immutableLatestHeight int64) *Store {
-	return NewStore(is.appDB, version, is.storeKey, types.CommitID{}, stateDir, baseDatadir, false, immutableLatestHeight)
+func (is *Store) LoadImmutableVersion(version int64, stateDir string, baseDatadir string, immutableLatestHeight int64, pruneDepth int64) *Store {
+	return NewStore(is.appDB, version, is.storeKey, types.CommitID{}, stateDir, baseDatadir, false, immutableLatestHeight, pruneDepth)
 }
 
-func (is *Store) Get(key []byte) ([]byte, error) {
-	if is.isMutable { // if latestHeight
-		return is.state.Get(key)
-	}
+func (is *Store) stateGet(key []byte) ([]byte, error) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("State Get"))
+	return is.state.Get(key)
+}
 
-	if is.isHistoricalQuery() {
-		return is.asdb.GetMutable(is.height-1, is.storeKey, key)
+func (is *Store) appDBGet(key []byte) ([]byte, error) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("AppDB Get"))
+	return is.appDB.Get(StoreKey(is.height-1, is.storeKey, string(key)))
+}
+
+func logDebug(height int64, operation, storekey, stmt, expectedValueHex string) {
+	fmt.Println(fmt.Sprintf("%d,%s,%s,%q,%s", height, operation, storekey, stmt, expectedValueHex))
+}
+
+func (is *Store) Get(key []byte) (result []byte, err error) {
+	if is.isMutable {
+		result, err = is.stateGet(key)
 	} else {
-		return is.appDB.Get(StoreKey(is.height-1, is.storeKey, string(key)))
+		if is.isHistoricalQuery() {
+			result, err = is.asdb.GetMutable(is.height-1, is.storeKey, key)
+		} else {
+			result, err = is.appDBGet(key)
+		}
 	}
+
+	if is.debug {
+		var height = is.height
+		if !is.isMutable {
+			height = height - 1
+		}
+		asdbGetStmt := is.asdb.GetMutableStmt(height, is.storeKey, key)
+		logDebug(is.height, "GET", is.storeKey, asdbGetStmt, hex.EncodeToString(result))
+		//fmt.Println(fmt.Sprintf("GET,%d,%s,%s,%s", is.height, is.storeKey, asdbGetStmt, hex.EncodeToString(result)))
+		//result, resultErr := is.asdb.GetMutable(is.height-1, is.storeKey, key)
+		//if resultErr != nil {
+		//	panic("Error on asdb get: " + resultErr.Error())
+		//}
+		//
+		//appDBGet, appDBGetErr := is.appDBGet(key)
+		//if appDBGetErr != nil {
+		//	panic("Error on appdb get: " + appDBGetErr.Error())
+		//}
+		//
+		//if !bytes.Equal(appDBGet, result) || (appDBGet == nil && result != nil) || (appDBGet != nil && result == nil) {
+		//	fmt.Println(fmt.Sprintf("Different get results for key: %s", hex.EncodeToString(key)))
+		//	fmt.Println(fmt.Sprintf("IAVL Value: %s", hex.EncodeToString(appDBGet)))
+		//	fmt.Println(fmt.Sprintf("ASDB Value: %s", hex.EncodeToString(result)))
+		//	panic(fmt.Sprintf("Difference in get response between iavl get %s and result get %s", appDBGet, result))
+		//}
+		//
+		//return result, resultErr
+	}
+
+	return result, err
 }
 
+// Is never called
 func (is *Store) Has(key []byte) (bool, error) {
 	if is.isMutable { // if latestHeight
 		return is.state.Has(key)
@@ -109,83 +163,302 @@ func (is *Store) Has(key []byte) (bool, error) {
 	}
 }
 
-func (is *Store) Set(key, value []byte) error {
+func (is *Store) iavlSet(key, value []byte) error {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("IAVL Set"))
+	err := is.iavl.Set(key, value)
+	if err != nil {
+		panic("unable to set to iavl: " + err.Error())
+	}
+	return err
+}
+
+func (is *Store) stateSet(key, value []byte) error {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("State Set"))
+	err := is.state.Set(key, value)
+	if err != nil {
+		panic("unable to set to state: " + err.Error())
+	}
+	return err
+}
+
+func (is *Store) Set(key, value []byte) (err error) {
 	if is.isMutable {
 		// Set the Iavl
-		err := is.iavl.Set(key, value)
-		if err != nil {
-			panic("unable to set to iavl: " + err.Error())
-		}
+		is.iavlSet(key, value)
+		//err := is.iavl.Set(key, value)
+		//if err != nil {
+		//	panic("unable to set to iavl: " + err.Error())
+		//}
 
 		// Set the state db
-		stateErr := is.state.Set(key, value)
-		if stateErr != nil {
-			panic("unable to set state: " + stateErr.Error())
-		}
+		is.stateSet(key, value)
+		//stateErr := is.state.Set(key, value)
+		//if stateErr != nil {
+		//	panic("unable to set state: " + stateErr.Error())
+		//}
 
 		// Return with the historical set
 		asdbErr := is.asdb.SetMutable(is.height, is.storeKey, key, value)
 		if asdbErr != nil {
 			panic("unable to set to asdb: " + asdbErr.Error())
 		}
+
+		if is.debug {
+			setStmt := is.asdb.SetMutableStmt(is.height, is.storeKey, key, value)
+			logDebug(is.height, "SET", is.storeKey, setStmt, "")
+		}
+
 		return asdbErr
 	}
 	panic("'Set()' called on immutable store")
 }
 
-func (is *Store) Delete(key []byte) error {
+func (is *Store) iavlDelete(key []byte) error {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("IAVL Delete"))
+	err := is.iavl.Delete(key)
+	if err != nil {
+		panic("unable to delete to iavl: " + err.Error())
+	}
+	return err
+}
+
+func (is *Store) stateDelete(key []byte) error {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("State Delete"))
+	err := is.state.Delete(key)
+	if err != nil {
+		panic("unable to delete to state: " + err.Error())
+	}
+	return err
+}
+
+func (is *Store) Delete(key []byte) (err error) {
 	if is.isMutable {
-		err := is.iavl.Delete(key)
-		if err != nil {
-			panic("unable to delete to iavl: " + err.Error())
-		}
+		is.iavlDelete(key)
+		//err := is.iavl.Delete(key)
+		//if err != nil {
+		//	panic("unable to delete to iavl: " + err.Error())
+		//}
 		// Delete the state db
-		stateErr := is.state.Delete(key)
-		if stateErr != nil {
-			panic("unable to set state: " + stateErr.Error())
-		}
+		is.stateDelete(key)
+		//stateErr := is.state.Delete(key)
+		//if stateErr != nil {
+		//	panic("unable to set state: " + stateErr.Error())
+		//}
+
 
 		// Return with the historical delete
 		asdbErr := is.asdb.DeleteMutable(is.height, is.storeKey, key)
 		if asdbErr != nil {
 			panic("unable to set to asdb: " + asdbErr.Error())
 		}
+
+		if is.debug {
+			deleteStmt := is.asdb.DeleteMutableStmt(is.height, is.storeKey, key)
+			logDebug(is.height, "DELETE", is.storeKey, deleteStmt, "")
+		}
+
 		return asdbErr
 	}
 	panic("'Delete()' called on immutable store")
 }
 
-func (is *Store) Iterator(start, end []byte) (types.Iterator, error) {
-	if is.isMutable {
-		return is.state.Iterator(start, end)
+func iteratorOutputHash(iterator types.Iterator) string {
+	var result [32]byte
+	for iterator.Valid() {
+		var keyValue = sha256.Sum256(append(iterator.Key(), iterator.Value()...))
+		result = sha256.Sum256(append(result[:], keyValue[:]...))
+		iterator.Next()
 	}
-
-	if is.isHistoricalQuery() {
-		return is.asdb.IteratorMutable(is.height - 1, is.storeKey, start, end)
-	} else {
-		baseIterator, err := is.appDB.Iterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
-		return AppDBIterator{it: baseIterator}, err
-	}
-
+	return hex.EncodeToString(result[:])
 }
 
-func (is *Store) ReverseIterator(start, end []byte) (types.Iterator, error) {
-	if is.isMutable {
-		return is.state.ReverseIterator(start, end)
+func iteratorEquals(iterator1, iterator2 types.Iterator) bool {
+	// First compares validity
+	if iterator1.Valid() != iterator2.Valid() {
+		return false
 	}
-	if is.isHistoricalQuery() {
-		return is.asdb.ReverseIteratorMutable(is.height - 1, is.storeKey, start, end)
-	} else {
-		baseIterator, err := is.appDB.ReverseIterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
-		return AppDBIterator{it: baseIterator}, err
+
+	// Compare contents and order
+	for iterator1.Valid() && iterator2.Valid() {
+		if !bytes.Equal(iterator1.Key(), iterator2.Key()) || !bytes.Equal(iterator1.Value(), iterator2.Value()) {
+			fmt.Println(fmt.Sprintf("Iterator Keys are different between %s and %s", hex.EncodeToString(iterator1.Key()), hex.EncodeToString(iterator2.Key())))
+			fmt.Println(fmt.Sprintf("Iterator Values are different between %s and %s", hex.EncodeToString(iterator1.Value()), hex.EncodeToString(iterator2.Value())))
+			return false
+		}
+
+		if (iterator1.Key() == nil && iterator2.Key() != nil) || (iterator2.Key() == nil && iterator1.Key() != nil) {
+			fmt.Println(fmt.Sprintf("Iterator Keys are different between %s and %s", hex.EncodeToString(iterator1.Key()), hex.EncodeToString(iterator2.Key())))
+			fmt.Println(fmt.Sprintf("Iterator Values are different between %s and %s", hex.EncodeToString(iterator1.Value()), hex.EncodeToString(iterator2.Value())))
+			return false
+		}
+
+		if (iterator1.Value() == nil && iterator2.Value() != nil) || (iterator2.Value() == nil && iterator1.Value() != nil) {
+			fmt.Println(fmt.Sprintf("Iterator Keys are different between %s and %s", hex.EncodeToString(iterator1.Key()), hex.EncodeToString(iterator2.Key())))
+			fmt.Println(fmt.Sprintf("Iterator Values are different between %s and %s", hex.EncodeToString(iterator1.Value()), hex.EncodeToString(iterator2.Value())))
+			return false
+		}
+		iterator1.Next()
+		iterator2.Next()
+
+		if iterator1.Valid() != iterator2.Valid() {
+			if iterator1.Valid() {
+				fmt.Println("PRINTING THE REMAINDER OF ITERATOR 1 ENTRIES")
+				for iterator1.Valid() {
+					fmt.Println("------------")
+					fmt.Println(fmt.Sprintf("Key: %s", hex.EncodeToString(iterator1.Key())))
+					fmt.Println(fmt.Sprintf("Value: %s", hex.EncodeToString(iterator1.Value())))
+					fmt.Println("------------")
+					iterator1.Next()
+				}
+			}
+
+			if iterator2.Valid() {
+				fmt.Println("PRINTING THE REMAINDER OF ITERATOR 2 ENTRIES")
+				for iterator2.Valid() {
+					fmt.Println("------------")
+					fmt.Println(fmt.Sprintf("Key: %s", hex.EncodeToString(iterator2.Key())))
+					fmt.Println(fmt.Sprintf("Value: %s", hex.EncodeToString(iterator2.Value())))
+					fmt.Println("------------")
+					iterator2.Next()
+				}
+			}
+			return false
+		}
 	}
+	return true
 }
 
-// Persist State & IAVL
-func (is *Store) CommitBatch(b dbm.Batch) (commitID types.CommitID, batch dbm.Batch) {
-	// commit iavl
-	commitID = is.iavl.Commit()
-	// commit entire state
+func (is *Store) stateIterator(start, end []byte) (types.Iterator, error) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("State Iterator with order ASC"))
+	return is.state.Iterator(start, end)
+}
+
+func (is *Store) appDBIterator(start, end []byte) (types.Iterator, error) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("AppDB Iterator with order ASC"))
+	baseIterator, err := is.appDB.Iterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
+	return AppDBIterator{it: baseIterator}, err
+}
+
+func (is *Store) Iterator(start, end []byte) (it types.Iterator, err error) {
+	if is.isMutable {
+		it, err = is.stateIterator(start, end)
+	} else {
+		if is.isHistoricalQuery() {
+			it, err = is.asdb.IteratorMutable(is.height-1, is.storeKey, start, end)
+		} else {
+			it, err = is.appDBIterator(start, end)
+		}
+	}
+
+	if is.debug {
+		var height = is.height
+		if !is.isMutable {
+			height = height - 1
+		}
+		asdbItStmt := is.asdb.IteratorMutableStmt(height, is.storeKey, start, end)
+		expectedValueHash := iteratorOutputHash(it)
+		logDebug(is.height, "IT", is.storeKey, asdbItStmt, expectedValueHash)
+		//appDBIterator, appDBItErr := is.appDBIterator(start, end)
+		//if appDBItErr != nil {
+		//	panic("Error on appdb iterator: " + appDBItErr.Error())
+		//}
+		//
+		//asdbIt, asdbItErr := is.asdb.IteratorMutable(is.height-1, is.storeKey, start, end)
+		//if asdbItErr != nil {
+		//	panic("Error on asdb iterator: " + asdbItErr.Error())
+		//}
+		//
+		//if !iteratorEquals(appDBIterator, asdbIt) {
+		//	fmt.Println(fmt.Sprintf("Different Iterators on height: %d", is.height))
+		//	fmt.Println(fmt.Sprintf("Different Iterators with start: %s and end: %s", hex.EncodeToString(start), hex.EncodeToString(end)))
+		//	panic(fmt.Sprintf("Different Iterators on table %s", is.storeKey))
+		//}
+		//
+		//return asdbIt, asdbItErr
+		if is.isMutable {
+			it, err = is.stateIterator(start, end)
+		} else {
+			if is.isHistoricalQuery() {
+				it, err = is.asdb.IteratorMutable(is.height-1, is.storeKey, start, end)
+			} else {
+				it, err = is.appDBIterator(start, end)
+			}
+		}
+	}
+
+	return it, err
+}
+
+func (is *Store) stateReverseIterator(start, end []byte) (types.Iterator, error) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("State Reverse Iterator with order DESC"))
+	return is.state.ReverseIterator(start, end)
+}
+
+func (is *Store) appDBReverseIterator(start, end []byte) (types.Iterator, error) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("AppDB Reverse Iterator with order DESC"))
+	baseIterator, err := is.appDB.ReverseIterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
+	return AppDBIterator{it: baseIterator}, err
+}
+
+func (is *Store) ReverseIterator(start, end []byte) (it types.Iterator, err error) {
+	if is.isMutable {
+		it, err = is.stateReverseIterator(start, end)
+		//return is.stateReverseIterator(start, end)
+	} else {
+		if is.isHistoricalQuery() {
+			it, err = is.asdb.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
+			//return is.asdb.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
+		} else {
+			it, err = is.appDBReverseIterator(start, end)
+			//return is.appDBReverseIterator(start, end)
+		}
+	}
+
+	if is.debug {
+		var height = is.height
+		if !is.isMutable {
+			height = height - 1
+		}
+		asdbItStmt := is.asdb.ReverseIteratorMutableStmt(height, is.storeKey, start, end)
+		expectedValueHash := iteratorOutputHash(it)
+		logDebug(is.height, "IT", is.storeKey, asdbItStmt, expectedValueHash)
+		//appDBIterator, appDBItErr := is.appDBReverseIterator(start, end)
+		//if appDBItErr != nil {
+		//	panic("Error on appdb iterator: " + appDBItErr.Error())
+		//}
+		//
+		//asdbIt, asdbItErr := is.asdb.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
+		//if asdbItErr != nil {
+		//	panic("Error on asdb iterator: " + asdbItErr.Error())
+		//}
+		//
+		//if !iteratorEquals(appDBIterator, asdbIt) {
+		//	fmt.Println(fmt.Sprintf("Different Iterators on height: %d", is.height))
+		//	fmt.Println(fmt.Sprintf("Different Iterators with start: %s and end: %s", hex.EncodeToString(start), hex.EncodeToString(end)))
+		//	panic(fmt.Sprintf("Different Iterators on table %s", is.storeKey))
+		//}
+
+		if is.isMutable {
+			it, err = is.stateReverseIterator(start, end)
+		} else {
+			if is.isHistoricalQuery() {
+				it, err = is.asdb.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
+			} else {
+				it, err = is.appDBReverseIterator(start, end)
+			}
+		}
+	}
+
+	return it, err
+}
+
+func (is *Store) iavlCommit() (commitID types.CommitID) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("IAVL CommitMutable"))
+	return is.iavl.Commit()
+}
+
+func (is *Store) stateCommit(b dbm.Batch) (batch dbm.Batch) {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("State CommitMutable"))
 	it, err := is.state.Iterator(nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("unable to create an iterator for height %d storeKey %s in Commit()", is.height, is.storeKey))
@@ -194,6 +467,23 @@ func (is *Store) CommitBatch(b dbm.Batch) (commitID types.CommitID, batch dbm.Ba
 	for ; it.Valid(); it.Next() {
 		b.Set(StoreKey(is.height, is.storeKey, string(it.Key())), it.Value())
 	}
+	return b
+}
+
+// Persist State & IAVL
+func (is *Store) CommitBatch(b dbm.Batch) (commitID types.CommitID, batch dbm.Batch) {
+	// commit iavl
+	commitID = is.iavlCommit() //is.iavl.Commit()
+	// commit entire state
+	b = is.stateCommit(b)
+	//it, err := is.state.Iterator(nil, nil)
+	//if err != nil {
+	//	panic(fmt.Sprintf("unable to create an iterator for height %d storeKey %s in Commit()", is.height, is.storeKey))
+	//}
+	//defer it.Close()
+	//for ; it.Valid(); it.Next() {
+	//	b.Set(StoreKey(is.height, is.storeKey, string(it.Key())), it.Value())
+	//}
 
 	// Commit to the historical db (asdb)
 	commitErr := is.asdb.CommitMutable()
@@ -201,11 +491,13 @@ func (is *Store) CommitBatch(b dbm.Batch) (commitID types.CommitID, batch dbm.Ba
 		panic(commitErr.Error())
 	}
 
-	is.height++
-
-	if is.height >= 300 {
-		log.Fatal("TELMINAMO")
+	if is.hasCommitted && is.height%5000 == 0 {
+		log.Fatal(fmt.Sprintf("TELMINAMO: %d \n", is.height))
+	} else {
+		is.hasCommitted = true
 	}
+
+	is.height++
 
 	return commitID, b
 }

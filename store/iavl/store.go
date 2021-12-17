@@ -2,10 +2,12 @@ package iavl
 
 import (
 	"fmt"
+	"github.com/pokt-network/pocket-core/store"
 	"github.com/pokt-network/pocket-core/store/cachemulti"
 	"github.com/pokt-network/pocket-core/store/types"
 	"github.com/tendermint/tendermint/libs/kv"
 	"sync"
+	"time"
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tm-db"
@@ -167,6 +169,7 @@ func (st *Store) CacheWrap() types.CacheWrap {
 
 // Implements types.KVStore.
 func (st *Store) Set(key, value []byte) error {
+	defer store.TimeTrack(time.Now(), fmt.Sprintf("IAVL Set"))
 	if value == nil {
 		panic("value is nil")
 	}

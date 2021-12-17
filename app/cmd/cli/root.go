@@ -82,6 +82,7 @@ var startCmd = &cobra.Command{
 }
 
 func start(cmd *cobra.Command, args []string) {
+	log.Println("Start")
 	var genesisType app.GenesisType
 	if mainnet && testnet {
 		fmt.Println("cannot run with mainnet and testnet genesis simultaneously, please choose one")
