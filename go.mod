@@ -10,6 +10,7 @@ require (
 	github.com/jordanorelli/lexnum v0.0.0-20141216151731-460eeb125754
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
+	github.com/pokt-network/tendermint v0.32.11-0.20211221192741-495b93a70cb1 // indirect
 	github.com/prometheus/client_golang v1.5.1
 	github.com/regen-network/cosmos-proto v0.3.0
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
