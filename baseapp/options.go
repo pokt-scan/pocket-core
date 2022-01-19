@@ -12,8 +12,10 @@ import (
 // for options that need access to non-exported fields of the BaseApp
 
 // SetPruning sets a pruning option on the multistore associated with the app
-func SetPruning(opts sdk.PruningOptions) func(*BaseApp) {
-	return func(bap *BaseApp) { bap.cms.SetPruning(opts) }
+func SetPruning(opts store.PruningOptions) func(*BaseApp) {
+	return func(bap *BaseApp) {
+		bap.cms.SetPruning(opts)
+	}
 }
 
 // SetHaltHeight returns a BaseApp option function that sets the halt block height.
