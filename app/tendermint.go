@@ -67,8 +67,10 @@ func NewClient(c config, creator AppCreator) (*node.Node, *PocketCoreApp, error)
 }
 
 func OpenApplicationDB(config sdk.Config) (dbm.DB, error) {
+	//dataDir := filepath.Join(config.TendermintConfig.RootDir, GlobalConfig.TendermintConfig.DBPath)
+	//return sdk.NewLevelDB(sdk.ApplicationDBName, dataDir, config.TendermintConfig.LevelDBOptions.ToGoLevelDBOpts())
 	dataDir := filepath.Join(config.TendermintConfig.RootDir, GlobalConfig.TendermintConfig.DBPath)
-	return sdk.NewLevelDB(sdk.ApplicationDBName, dataDir, config.TendermintConfig.LevelDBOptions.ToGoLevelDBOpts())
+	return dbm.NewGoLevelDB(sdk.ApplicationDBName, dataDir)
 }
 
 func OpenTxIndexerDB(config sdk.Config) (dbm.DB, error) {
