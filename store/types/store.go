@@ -2,113 +2,54 @@ package types
 
 import (
 	"fmt"
-	"io"
-
 	"github.com/tendermint/tendermint/libs/kv"
 
-	abci "github.com/tendermint/tendermint/abci/types"
 	dbm "github.com/tendermint/tm-db"
 )
 
-type Store interface { //nolint
+type Store interface {
 	GetStoreType() StoreType
 	CacheWrapper
 }
 
-// something that can persist to disk
 type Committer interface {
 	Commit() CommitID
 	LastCommitID() CommitID
-	SetPruning(PruningOptions)
 }
 
-// Stores of MultiStore must implement CommitStore.
 type CommitStore interface {
 	Committer
 	Store
 }
 
-// Queryable allows a Store to expose internal state to the abci.Query
-// interface. Multistore can route requests to the proper Store.
-//
-// This is an optional, but useful extension to any CommitStore
-type Queryable interface {
-	Query(abci.RequestQuery) abci.ResponseQuery
-}
-
-//----------------------------------------
-// MultiStore
-
-type MultiStore interface { //nolint
+type MultiStore interface {
 	Store
-
-	// Cache wrap MultiStore.
-	// NOTE: Caller should probably not call .Write() on each, but
-	// call CacheMultiStore.Write().
+	// Cache wrap MultiStore
 	CacheMultiStore() CacheMultiStore
-
-	// CacheMultiStoreWithVersion cache-wraps the underlying MultiStore where
-	// each stored is loaded at a specific version (height).
-	CacheMultiStoreWithVersion(version int64) (CacheMultiStore, error)
-
-	// Convenience for fetching substores.
-	// If the store does not exist, panics.
-	GetStore(StoreKey) Store
 	GetKVStore(StoreKey) KVStore
-
-	// TracingEnabled returns if tracing is enabled for the MultiStore.
-	TracingEnabled() bool
-
-	// SetTracer sets the tracer for the MultiStore that the underlying
-	// stores will utilize to trace operations. The modified MultiStore is
-	// returned.
-	SetTracer(w io.Writer) MultiStore
-
-	// SetTracingContext sets the tracing context for a MultiStore. It is
-	// implied that the caller should update the context when necessary between
-	// tracing operations. The modified MultiStore is returned.
-	SetTracingContext(TraceContext) MultiStore
 }
 
-// From MultiStore.CacheMultiStore()....
 type CacheMultiStore interface {
 	MultiStore
 	Write() // Writes operations to underlying KVStore
 }
 
-// A non-cache MultiStore.
 type CommitMultiStore interface {
 	Committer
 	MultiStore
 
-	// Mount a store of type using the given db.
-	// If db == nil, the new store will use the CommitMultiStore db.
+	// Mount a store of type using the given db
 	MountStoreWithDB(key StoreKey, typ StoreType, db dbm.DB)
 
-	// Panics on a nil key.
-	GetCommitStore(key StoreKey) CommitStore
-
-	// Panics on a nil key.
-	GetCommitKVStore(key StoreKey) CommitKVStore
-
-	// Load the latest persisted version. Called once after all calls to
-	// Mount*Store() are complete.
+	// Load the latest persisted version
 	LoadLatestVersion() error
 
-	// Load a specific persisted version. When you load an old version, or when
-	// the last commit attempt didn't complete, the next commit after loading
-	// must be idempotent (return the same commit id). Otherwise the behavior is
-	// undefined.
-	LoadVersion(ver int64) error
-	// Load a specific persisted version in a memory saving fashion.
-	// Don't iterate through and collect all the roots and versions
-	LoadLazyVersion(ver int64) (*Store, error)
-	RollbackVersion(ver int64) error
-	CopyStore() *Store
-}
+	// Load a specific persisted version; read only
+	LoadImmutableVersion(ver int64) (*Store, error)
 
-//---------subsp-------------------------------
-// KVStore
+	// Set Pruning
+	SetPruning(option PruningOptions)
+}
 
 // KVStore is a simple interface to get/set data
 type KVStore interface {
@@ -150,7 +91,6 @@ type Iterator = dbm.Iterator
 // object expire.
 type CacheKVStore interface {
 	KVStore
-
 	// Writes operations to underlying KVStore
 	Write()
 }
@@ -161,9 +101,6 @@ type CommitKVStore interface {
 	KVStore
 }
 
-//----------------------------------------
-// CacheWrap
-
 // CacheWrap makes the most appropriate cache-wrap. For example,
 // IAVLStore.CacheWrap() returns a CacheKVStore. CacheWrap should not return
 // a Committer, since Commit cache-wraps make no sense. It can return KVStore,
@@ -171,30 +108,12 @@ type CommitKVStore interface {
 type CacheWrap interface {
 	// Write syncs with the underlying store.
 	Write()
-
-	// CacheWrap recursively wraps again.
-	CacheWrap() CacheWrap
-
-	// CacheWrapWithTrace recursively wraps again with tracing enabled.
-	CacheWrapWithTrace(w io.Writer, tc TraceContext) CacheWrap
 }
 
 type CacheWrapper interface { //nolint
 	// CacheWrap cache wraps.
 	CacheWrap() CacheWrap
-
-	// CacheWrapWithTrace cache wraps with tracing enabled.
-	CacheWrapWithTrace(w io.Writer, tc TraceContext) CacheWrap
 }
-
-//----------------------------------------
-// CommitID
-
-// CommitID contains the tree version number and its merkle root.
-// type CommitID struct {
-// 	Version int64
-// 	Hash    []byte
-// }
 
 func (cid CommitID) IsZero() bool { //nolint
 	return cid.Version == 0 && len(cid.Hash) == 0
@@ -204,22 +123,14 @@ func (cid CommitID) String() string {
 	return fmt.Sprintf("CommitID{%v:%X}", cid.Hash, cid.Version)
 }
 
-//----------------------------------------
-// Store types
-
 // kind of store
 type StoreType int
 
 const (
 	//nolint
 	StoreTypeMulti StoreType = iota
-	StoreTypeDB
-	StoreTypeIAVL
-	StoreTypeTransient
+	StoreTypeDefault
 )
-
-//----------------------------------------
-// PublicKeys for accessing substores
 
 // storeKey is a key used to index stores in a MultiStore.
 type StoreKey interface {
@@ -249,53 +160,5 @@ func (key *KVStoreKey) String() string {
 	return fmt.Sprintf("KVStoreKey{%p, %s}", key, key.name)
 }
 
-// TransientStoreKey is used for indexing transient stores in a MultiStore
-type TransientStoreKey struct {
-	name string
-}
-
-// Constructs new TransientStoreKey
-// Must return a pointer according to the ocap principle
-func NewTransientStoreKey(name string) *TransientStoreKey {
-	return &TransientStoreKey{
-		name: name,
-	}
-}
-
-// Implements storeKey
-func (key *TransientStoreKey) Name() string {
-	return key.name
-}
-
-// Implements storeKey
-func (key *TransientStoreKey) String() string {
-	return fmt.Sprintf("TransientStoreKey{%p, %s}", key, key.name)
-}
-
-//----------------------------------------
-
 // key-value result for iterator queries
 type KVPair kv.Pair
-
-//----------------------------------------
-
-// TraceContext contains TraceKVStore context data. It will be written with
-// every trace operation.
-type TraceContext map[string]interface{}
-
-type SingleStoreCache interface {
-	Get(height int64, key []byte) ([]byte, error)
-	Has(height int64, key []byte) (bool, error)
-	Set(key []byte, value []byte)
-	Remove(key []byte) error
-	Iterator(height int64, start, end []byte) (Iterator, error)
-	ReverseIterator(height int64, start, end []byte) (Iterator, error)
-	Commit(height int64)
-	Initialize(currentData map[string]string, version int64)
-	IsValid() bool
-}
-
-type MultiStoreCache interface {
-	InitializeSingleStoreCache(height int64, storeKey StoreKey) error
-	GetSingleStoreCache(storekey StoreKey) SingleStoreCache
-}
