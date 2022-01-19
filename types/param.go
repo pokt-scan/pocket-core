@@ -5,18 +5,15 @@ import (
 	"reflect"
 
 	"github.com/pokt-network/pocket-core/codec"
-
-	"github.com/pokt-network/pocket-core/store/prefix"
 )
 
 const (
-	paramsKey  = "params"
-	paramsTKey = "transient_params"
+	paramsKey = "params"
 )
 
 var (
-	ParamsKey  = NewKVStoreKey(paramsKey)
-	ParamsTKey = NewTransientStoreKey(paramsTKey)
+	ParamsKey = NewKVStoreKey(paramsKey)
+	//ParamsTKey = NewTransientStoreKey(paramsTKey)
 )
 
 // Individual parameter store for each keeper
@@ -35,7 +32,6 @@ func NewSubspace(name string) (res Subspace) {
 	res = Subspace{
 		cdc:  cdc,
 		key:  ParamsKey,
-		tkey: ParamsTKey,
 		name: []byte(name),
 		table: KeyTable{
 			m: make(map[string]attribute),
@@ -74,14 +70,7 @@ func (s Subspace) WithKeyTable(table KeyTable) Subspace {
 func (s Subspace) kvStore(ctx Ctx) KVStore {
 	// append here is safe, appends within a function won't cause
 	// weird side effects when its singlethreaded
-	return prefix.NewStore(ctx.KVStore(s.key), append(s.name, '/'))
-}
-
-// Returns a transient store for modification
-func (s Subspace) transientStore(ctx Ctx) KVStore {
-	// append here is safe, appends within a function won't cause
-	// weird side effects when its singlethreaded
-	return prefix.NewStore(ctx.TransientStore(s.tkey), append(s.name, '/'))
+	return NewPrefixStore(ctx.KVStore(s.key), append(s.name, '/'))
 }
 
 func concatKeys(key, subkey []byte) (res []byte) {
@@ -163,8 +152,7 @@ func (s Subspace) Has(ctx Ctx, key []byte) (bool, error) {
 
 // Returns true if the parameter is set in the block
 func (s Subspace) Modified(ctx Ctx, key []byte) (bool, error) {
-	tstore := s.transientStore(ctx)
-	return tstore.Has(key)
+	panic("deprecated")
 }
 
 func (s Subspace) checkType(store KVStore, key []byte, param interface{}) {
@@ -199,8 +187,8 @@ func (s Subspace) Set(ctx Ctx, key []byte, param interface{}) {
 		panic(err)
 	}
 	_ = store.Set(key, bz)
-	tstore := s.transientStore(ctx)
-	_ = tstore.Set(key, []byte{})
+	//tstore := s.transientStore(ctx)
+	//_ = tstore.Set(key, []byte{})
 }
 
 // Update stores raw parameter bytes. It returns error if the stored parameter
@@ -221,8 +209,8 @@ func (s Subspace) Update(ctx Ctx, key []byte, param []byte) error {
 	}
 
 	s.Set(ctx, key, dest)
-	tStore := s.transientStore(ctx)
-	_ = tStore.Set(key, []byte{})
+	//tStore := s.transientStore(ctx)
+	//_ = tStore.Set(key, []byte{})
 
 	return nil
 }
@@ -242,8 +230,8 @@ func (s Subspace) SetWithSubkey(ctx Ctx, key []byte, subkey []byte, param interf
 	}
 	_ = store.Set(newkey, bz)
 
-	tstore := s.transientStore(ctx)
-	_ = tstore.Set(newkey, []byte{})
+	//tstore := s.transientStore(ctx)
+	//_ = tstore.Set(newkey, []byte{})
 }
 
 // UpdateWithSubkey stores raw parameter bytes  with a key and subkey. It checks
@@ -265,8 +253,8 @@ func (s Subspace) UpdateWithSubkey(ctx Ctx, key []byte, subkey []byte, param []b
 	}
 
 	s.SetWithSubkey(ctx, key, subkey, dest)
-	tStore := s.transientStore(ctx)
-	_ = tStore.Set(concatkey, []byte{})
+	//tStore := s.transientStore(ctx)
+	//_ = tStore.Set(concatkey, []byte{})
 
 	return nil
 }

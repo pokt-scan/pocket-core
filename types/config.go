@@ -42,7 +42,6 @@ type PocketConfig struct {
 	ABCILogging              bool   `json:"abci_logging"`
 	RelayErrors              bool   `json:"show_relay_errors"`
 	DisableTxEvents          bool   `json:"disable_tx_events"`
-	Cache                    bool   `json:"-"`
 }
 
 type Config struct {
@@ -77,7 +76,7 @@ const (
 	DefaultTxIndexTags                 = "tx.hash,tx.height,message.sender,transfer.recipient"
 	ConfigDirName                      = "config"
 	ConfigFileName                     = "config.json"
-	ApplicationDBName                  = "application"
+	ApplicationDBName                  = "applicationiavl"
 	TransactionIndexerDBName           = "txindexer"
 	PlaceholderHash                    = "0001"
 	PlaceholderURL                     = "http://127.0.0.1:8081"
