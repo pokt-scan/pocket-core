@@ -4,6 +4,8 @@ import (
 	"fmt"
 	cdcTypes "github.com/pokt-network/pocket-core/codec/types"
 	"github.com/pokt-network/pocket-core/crypto"
+	"github.com/pokt-network/pocket-core/store"
+	"github.com/pokt-network/pocket-core/store/rootmulti"
 	"os"
 	"testing"
 
@@ -15,7 +17,6 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/pokt-network/pocket-core/codec"
-	"github.com/pokt-network/pocket-core/store"
 	"github.com/pokt-network/pocket-core/x/auth/types"
 
 	sdk "github.com/pokt-network/pocket-core/types"
@@ -43,12 +44,12 @@ func makeTestCodec() *codec.Codec {
 func createTestInput(t *testing.T, isCheckTx bool, initPower int64, nAccs int64) (sdk.Context, Keeper) {
 	keyAcc := sdk.NewKVStoreKey(types.StoreKey)
 	keyParams := sdk.ParamsKey
-	tkeyParams := sdk.ParamsTKey
+	//tkeyParams := sdk.ParamsTKey
 	db := dbm.NewMemDB()
-	ms := store.NewCommitMultiStore(db, false)
+	ms := rootmulti.NewMultiStore(db, "", store.PruneNothingg)
 	ms.MountStoreWithDB(keyAcc, sdk.StoreTypeIAVL, db)
 	ms.MountStoreWithDB(keyParams, sdk.StoreTypeIAVL, db)
-	ms.MountStoreWithDB(tkeyParams, sdk.StoreTypeTransient, db)
+	//ms.MountStoreWithDB(tkeyParams, sdk.StoreTypeTransient, db)
 	err := ms.LoadLatestVersion()
 	require.Nil(t, err)
 	ctx := sdk.NewContext(ms, abci.Header{ChainID: "supply-chain"}, isCheckTx, log.NewNopLogger()).WithAppVersion("0.0.0")
