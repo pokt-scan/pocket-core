@@ -9,6 +9,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jordanorelli/lexnum v0.0.0-20141216151731-460eeb125754
 	github.com/julienschmidt/httprouter v1.3.0
+	github.com/mattn/go-sqlite3 v1.14.8
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.5.1
 	github.com/regen-network/cosmos-proto v0.3.0
@@ -27,4 +28,8 @@ require (
 	gopkg.in/yaml.v2 v2.2.5
 )
 
-replace github.com/tendermint/tendermint => github.com/pokt-network/tendermint v0.32.11-0.20211022155741-0dc25b2413ec
+//replace github.com/tendermint/tendermint => github.com/pokt-network/tendermint v0.32.11-0.20211022155741-0dc25b2413ec
+replace github.com/tendermint/tendermint => github.com/pokt-network/tendermint v0.32.11-0.20210702160503-ae429fe84ffe
+
+// TODO: Change to the 0.8 branch for iterator improvement
+replace github.com/tendermint/tm-db => github.com/pokt-network/tm-db v0.5.2-0.20220118210553-9b2300f289ba
