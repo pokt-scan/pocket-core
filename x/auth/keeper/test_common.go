@@ -46,7 +46,7 @@ func createTestInput(t *testing.T, isCheckTx bool, initPower int64, nAccs int64)
 	keyParams := sdk.ParamsKey
 	//tkeyParams := sdk.ParamsTKey
 	db := dbm.NewMemDB()
-	ms := rootmulti.NewMultiStore(db, "", store.PruneNothingg)
+	ms := rootmulti.NewMultiStore(db, "", store.PruneNothing)
 	ms.MountStoreWithDB(keyAcc, sdk.StoreTypeIAVL, db)
 	ms.MountStoreWithDB(keyParams, sdk.StoreTypeIAVL, db)
 	//ms.MountStoreWithDB(tkeyParams, sdk.StoreTypeTransient, db)
