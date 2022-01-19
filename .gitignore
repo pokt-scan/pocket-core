@@ -28,4 +28,8 @@ tests/unit/*.json
 # Data dir
 app/data/*
 
+# .run configurationsg
+.run
+run.sh
+
 
