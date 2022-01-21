@@ -3,6 +3,7 @@ package state
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"github.com/pokt-network/pocket-core/store/cachemulti"
@@ -10,7 +11,8 @@ import (
 	"github.com/pokt-network/pocket-core/store/sqlitedb"
 	"github.com/pokt-network/pocket-core/store/types"
 	dbm "github.com/tendermint/tm-db"
-	"log"
+	"strconv"
+	"strings"
 )
 
 var _ types.KVStore = (*Store)(nil)
@@ -30,6 +32,8 @@ type Store struct {
 	debug                 bool
 	hasCommitted          bool
 	pruneOption           types.PruningOptions
+	logOperation          bool
+	mockPruning           bool
 }
 
 func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.CommitID, stateDir string, baseDatadir string, isMutable bool, immutableLatestHeight int64, pruneOption types.PruningOptions) *Store {
@@ -39,6 +43,8 @@ func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.Commit
 		isMutable:             isMutable,
 		height:                height,
 		debug:                 false,
+		logOperation:          true,
+		mockPruning:           true,
 		immutableLatestHeight: immutableLatestHeight,
 		pruneOption:           pruneOption,
 	}
@@ -60,9 +66,8 @@ func NewStore(appDB dbm.DB, height int64, storeKey string, commitID types.Commit
 				panic("unable to set k/v in state: " + err.Error())
 			}
 		}
+		// TODO: Separate these db
 		// load IAVL from AppDB
-		// Cache for the IAVL store
-		//store.iavl, err = iavl.LoadStore(dbm.NewPrefixDB(appDB, []byte("s/k:"+storeKey+"/")), commitID, false) //iavl.LoadStore(dbm.NewPrefixDB(appDB, []byte("s/k:"+storeKey+"/")), commitID, types.PruneNothing, false, cache.GetSingleStoreCache(types.NewKVStoreKey(storeKey))) //iavl.LoadStoreSimple(appDB, commitID, false) //iavl.LoadStore(appDB, commitID, types.PruneNothing, false, cache.GetSingleStoreCache(types.NewKVStoreKey(storeKey)))
 		store.iavl, err = iavl.LoadStore(dbm.NewPrefixDB(appDB, []byte("s/k:"+storeKey+"/")), commitID, types.PruneNothing, false)
 		if err != nil {
 			panic("unable to load iavlStore in rootmultistore: " + err.Error())
@@ -99,18 +104,11 @@ func (is *Store) LoadImmutableVersion(version int64, stateDir string, baseDatadi
 }
 
 func (is *Store) stateGet(key []byte) ([]byte, error) {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("State Get"))
-	//return is.state.Get(key)
-	return is.iavl.Get(key)
+	return is.state.Get(key)
 }
 
 func (is *Store) appDBGet(key []byte) ([]byte, error) {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("AppDB Get"))
 	return is.appDB.Get(StoreKey(is.height-1, is.storeKey, string(key)))
-}
-
-func logDebug(height int64, operation, storekey, stmt, expectedValueHex string) {
-	//fmt.Println(fmt.Sprintf("%d,%s,%s,%q,%s", height, operation, storekey, stmt, expectedValueHex))
 }
 
 func (is *Store) Get(key []byte) (result []byte, err error) {
@@ -118,20 +116,31 @@ func (is *Store) Get(key []byte) (result []byte, err error) {
 		result, err = is.stateGet(key)
 	} else {
 		if is.isHistoricalQuery() {
-			result, err = is.sqLiteDB.GetMutable(is.height-1, is.storeKey, key)
+			// If we're logging operations and mocking pruning
+			if is.logOperation && is.mockPruning {
+				result, err = is.appDBGet(key)
+				if err != nil {
+					fmt.Println(err)
+				}
+				opRecord := []string{"##GET", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(key), bytesToBase64(result)}
+				logOperation(opRecord)
+			} else {
+				// We're just doing a plain old historical query
+				result, err = is.sqLiteDB.GetMutable(is.height-1, is.storeKey, key)
+			}
 		} else {
+			// Get the historical data from the unpruned appdb
 			result, err = is.appDBGet(key)
 		}
 	}
 
+	// TODO refactor this
 	if is.debug {
 		var height = is.height
 		if !is.isMutable {
 			height = height - 1
 		}
-		//asdbGetStmt := is.sqLiteDB.GetMutableStmt(height, is.storeKey, key)
-		//logDebug(is.height, "GET", is.storeKey, asdbGetStmt, hex.EncodeToString(result))
-		//fmt.Println(fmt.Sprintf("GET,%d,%s,%s,%s", is.height, is.storeKey, asdbGetStmt, hex.EncodeToString(result)))
+
 		result, resultErr := is.sqLiteDB.GetMutable(is.height-1, is.storeKey, key)
 		if resultErr != nil {
 			panic("Error on sqLiteDB get: " + resultErr.Error())
@@ -169,7 +178,6 @@ func (is *Store) Has(key []byte) (bool, error) {
 }
 
 func (is *Store) iavlSet(key, value []byte) error {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("IAVL Set"))
 	err := is.iavl.Set(key, value)
 	if err != nil {
 		panic("unable to set to iavl: " + err.Error())
@@ -178,7 +186,6 @@ func (is *Store) iavlSet(key, value []byte) error {
 }
 
 func (is *Store) stateSet(key, value []byte) error {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("State Set"))
 	err := is.state.Set(key, value)
 	if err != nil {
 		panic("unable to set to state: " + err.Error())
@@ -190,28 +197,20 @@ func (is *Store) Set(key, value []byte) (err error) {
 	if is.isMutable {
 		// Set the Iavl
 		is.iavlSet(key, value)
-		//err := is.iavl.Set(key, value)
-		//if err != nil {
-		//	panic("unable to set to iavl: " + err.Error())
-		//}
 
 		// Set the state db
 		is.stateSet(key, value)
-		//stateErr := is.state.Set(key, value)
-		//if stateErr != nil {
-		//	panic("unable to set state: " + stateErr.Error())
-		//}
 
-		// Return with the historical set
+		// Historical data set
 		asdbErr := is.sqLiteDB.SetMutable(is.height, is.storeKey, key, value)
 		if asdbErr != nil {
 			panic("unable to set to sqLiteDB: " + asdbErr.Error())
 		}
 
-		//if is.debug {
-		//	setStmt := is.sqLiteDB.SetMutableStmt(is.height, is.storeKey, key, value)
-		//	logDebug(is.height, "SET", is.storeKey, setStmt, "")
-		//}
+		if is.logOperation && is.mockPruning {
+			opRecord := []string{"##SET", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(key), bytesToBase64(value)}
+			logOperation(opRecord)
+		}
 
 		return asdbErr
 	}
@@ -219,7 +218,6 @@ func (is *Store) Set(key, value []byte) (err error) {
 }
 
 func (is *Store) iavlDelete(key []byte) error {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("IAVL Delete"))
 	err := is.iavl.Delete(key)
 	if err != nil {
 		panic("unable to delete to iavl: " + err.Error())
@@ -228,7 +226,6 @@ func (is *Store) iavlDelete(key []byte) error {
 }
 
 func (is *Store) stateDelete(key []byte) error {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("State Delete"))
 	err := is.state.Delete(key)
 	if err != nil {
 		panic("unable to delete to state: " + err.Error())
@@ -238,28 +235,22 @@ func (is *Store) stateDelete(key []byte) error {
 
 func (is *Store) Delete(key []byte) (err error) {
 	if is.isMutable {
+		// Iavl delete
 		is.iavlDelete(key)
-		//err := is.iavl.Delete(key)
-		//if err != nil {
-		//	panic("unable to delete to iavl: " + err.Error())
-		//}
-		// Delete the state db
-		is.stateDelete(key)
-		//stateErr := is.state.Delete(key)
-		//if stateErr != nil {
-		//	panic("unable to set state: " + stateErr.Error())
-		//}
 
-		// Return with the historical delete
+		// State delete
+		is.stateDelete(key)
+
+		// Historical delete
 		asdbErr := is.sqLiteDB.DeleteMutable(is.height, is.storeKey, key)
 		if asdbErr != nil {
 			panic("unable to set to sqLiteDB: " + asdbErr.Error())
 		}
 
-		//if is.debug {
-		//	deleteStmt := is.sqLiteDB.DeleteMutableStmt(is.height, is.storeKey, key)
-		//	logDebug(is.height, "DELETE", is.storeKey, deleteStmt, "")
-		//}
+		if is.logOperation && is.mockPruning {
+			opRecord := []string{"##DEL", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(key)}
+			logOperation(opRecord)
+		}
 
 		return asdbErr
 	}
@@ -273,7 +264,7 @@ func iteratorOutputHash(iterator types.Iterator) string {
 		result = sha256.Sum256(append(result[:], keyValue[:]...))
 		iterator.Next()
 	}
-	return hex.EncodeToString(result[:])
+	return bytesToBase64(result[:])
 }
 
 func iteratorEquals(iterator1, iterator2 types.Iterator) bool {
@@ -333,13 +324,10 @@ func iteratorEquals(iterator1, iterator2 types.Iterator) bool {
 }
 
 func (is *Store) stateIterator(start, end []byte) (types.Iterator, error) {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("State Iterator with order ASC"))
-	//return is.state.Iterator(start, end)
-	return is.iavl.Iterator(start, end)
+	return is.state.Iterator(start, end)
 }
 
 func (is *Store) appDBIterator(start, end []byte) (types.Iterator, error) {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("AppDB Iterator with order ASC"))
 	baseIterator, err := is.appDB.Iterator(StoreKey(is.height-1, is.storeKey, string(start)), StoreKey(is.height-1, is.storeKey, string(end)))
 	return AppDBIterator{it: baseIterator}, err
 }
@@ -348,10 +336,19 @@ func (is *Store) Iterator(start, end []byte) (it types.Iterator, err error) {
 	if is.isMutable {
 		it, err = is.stateIterator(start, end)
 	} else {
-		if is.isHistoricalQuery() {
-			it, err = is.sqLiteDB.IteratorMutable(is.height-1, is.storeKey, start, end)
-		} else {
+		// If we're logging operations and mocking pruning
+		if is.logOperation && is.mockPruning {
 			it, err = is.appDBIterator(start, end)
+			if err != nil {
+				fmt.Println(err)
+			}
+			opRecord := []string{"##ITE", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(start), bytesToBase64(end), iteratorOutputHash(it)}
+			logOperation(opRecord)
+
+			it, err = is.appDBIterator(start, end)
+		} else {
+			// We're just doing a plain old historical query
+			it, err = is.sqLiteDB.IteratorMutable(is.height-1, is.storeKey, start, end)
 		}
 	}
 
@@ -411,12 +408,19 @@ func (is *Store) ReverseIterator(start, end []byte) (it types.Iterator, err erro
 		it, err = is.stateReverseIterator(start, end)
 		//return is.stateReverseIterator(start, end)
 	} else {
-		if is.isHistoricalQuery() {
-			it, err = is.sqLiteDB.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
-			//return is.sqLiteDB.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
-		} else {
+		// If we're logging operations and mocking pruning
+		if is.logOperation && is.mockPruning {
 			it, err = is.appDBReverseIterator(start, end)
-			//return is.appDBReverseIterator(start, end)
+			if err != nil {
+				fmt.Println(err)
+			}
+			opRecord := []string{"##RIT", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(start), bytesToBase64(end), iteratorOutputHash(it)}
+			logOperation(opRecord)
+
+			it, err = is.appDBReverseIterator(start, end)
+		} else {
+			// We're just doing a plain old historical query
+			it, err = is.sqLiteDB.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
 		}
 	}
 
@@ -464,7 +468,6 @@ func (is *Store) iavlCommit() (commitID types.CommitID) {
 }
 
 func (is *Store) stateCommit(b dbm.Batch) (batch dbm.Batch) {
-	//defer store.TimeTrack(time.Now(), fmt.Sprintf("State CommitMutable"))
 	it, err := is.state.Iterator(nil, nil)
 	if err != nil {
 		panic(fmt.Sprintf("unable to create an iterator for height %d storeKey %s in Commit()", is.height, is.storeKey))
@@ -482,34 +485,22 @@ func (is *Store) CommitBatch(b dbm.Batch) (commitID types.CommitID, batch dbm.Ba
 	commitID = is.iavlCommit() //is.iavl.Commit()
 	// commit entire state
 	b = is.stateCommit(b)
-	//it, err := is.state.Iterator(nil, nil)
-	//if err != nil {
-	//	panic(fmt.Sprintf("unable to create an iterator for height %d storeKey %s in Commit()", is.height, is.storeKey))
-	//}
-	//defer it.Close()
-	//for ; it.Valid(); it.Next() {
-	//	b.Set(StoreKey(is.height, is.storeKey, string(it.Key())), it.Value())
-	//}
 
 	// Commit to the historical db (sqLiteDB)
 	commitErr := is.sqLiteDB.CommitMutable()
 	if commitErr != nil {
 		panic(commitErr.Error())
 	}
-
-	if is.hasCommitted && is.height%5000 == 0 {
-		log.Fatal(fmt.Sprintf("TELMINAMO: %d \n", is.height))
-	} else {
-		is.hasCommitted = true
-	}
-
+	is.hasCommitted = true
 	is.height++
-
 	return commitID, b
 }
 
 // Prune version in IAVL & AppDB
 func (is *Store) PruneVersion(batch dbm.Batch, version int64) dbm.Batch {
+	if is.mockPruning {
+		return batch
+	}
 	// iavl
 	is.iavl.DeleteVersion(version)
 	// appDB
@@ -566,6 +557,16 @@ func KeyFromStoreKey(storeKey []byte) (key []byte) {
 		}
 	}
 	panic("attempted to get key from store key that doesn't have exactly 2 delims")
+}
+
+func logOperation(record []string) {
+	fmt.Println(strings.Join(record, `,`))
+}
+
+func bytesToBase64(input []byte) string {
+	bas64Key := make([]byte, base64.StdEncoding.EncodedLen(len(input)))
+	base64.StdEncoding.Encode(bas64Key, input)
+	return string(bas64Key)
 }
 
 var _ dbm.Iterator = AppDBIterator{}
