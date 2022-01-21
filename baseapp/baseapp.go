@@ -124,7 +124,7 @@ func NewBaseApp(name string, logger log.Logger, db dbm.DB, txDecoder sdk.TxDecod
 		name:           name,
 		db:             db,
 		cdc:            cdc,
-		cms:            rootMulti.NewMultiStore(db, datadir, store.PruneNothing), //store.NewCommitMultiStore(db, cache),
+		cms:            rootMulti.NewMultiStore(db, datadir, store.PruneSyncable), //store.NewCommitMultiStore(db, cache),
 		router:         NewRouter(),
 		queryRouter:    NewQueryRouter(),
 		txDecoder:      txDecoder,
