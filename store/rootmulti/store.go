@@ -96,7 +96,7 @@ func (rs *MultiStore) LoadImmutableVersion(height int64) (*types.Store, error) {
 func (rs *MultiStore) Commit() types.CommitID {
 	// Log commit operation
 	fmt.Printf("##COM,%d\n", rs.lastCommitID.Version)
-	if rs.lastCommitID.Version > 0 && rs.lastCommitID.Version%10000 == 0 {
+	if rs.lastCommitID.Version > 0 && rs.lastCommitID.Version%35000 == 0 {
 		log.Fatal(fmt.Sprintf("TELMINAMO: %d \n", rs.lastCommitID.Version))
 	}
 

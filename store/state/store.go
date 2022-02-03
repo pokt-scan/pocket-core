@@ -2,7 +2,6 @@ package state
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -96,7 +95,15 @@ func (is *Store) isHistoricalQuery() bool {
 	if is.isMutable {
 		panic("Shouldn't be called if mutable")
 	}
-	return is.height < is.getLatestHeight()-is.pruneOption.KeepRecent()
+	//fmt.Println(fmt.Sprintf("Store height: %d", is.height))
+	//fmt.Println(fmt.Sprintf("Latest height: %d", is.getLatestHeight()))
+	//fmt.Println(fmt.Sprintf("Prune option keep recent: %d", is.pruneOption.KeepRecent()))
+	result := is.height < is.getLatestHeight()-is.pruneOption.KeepRecent()
+	//fmt.Println(fmt.Sprintf("Result: %t", result))
+	//if result == true {
+	//	fmt.Println("It's true")
+	//}
+	return result
 }
 
 func (is *Store) LoadImmutableVersion(version int64, stateDir string, baseDatadir string, immutableLatestHeight int64, pruneOption types.PruningOptions) *Store {
@@ -208,7 +215,7 @@ func (is *Store) Set(key, value []byte) (err error) {
 		}
 
 		if is.logOperation && is.mockPruning {
-			opRecord := []string{"##SET", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(key), bytesToBase64(value)}
+			opRecord := []string{"##SET", is.storeKey, strconv.FormatInt(is.height, 10), bytesToBase64(key), bytesToBase64(value)}
 			logOperation(opRecord)
 		}
 
@@ -248,7 +255,7 @@ func (is *Store) Delete(key []byte) (err error) {
 		}
 
 		if is.logOperation && is.mockPruning {
-			opRecord := []string{"##DEL", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(key)}
+			opRecord := []string{"##DEL", is.storeKey, strconv.FormatInt(is.height, 10), bytesToBase64(key)}
 			logOperation(opRecord)
 		}
 
@@ -258,13 +265,15 @@ func (is *Store) Delete(key []byte) (err error) {
 }
 
 func iteratorOutputHash(iterator types.Iterator) string {
-	var result [32]byte
+	var result []string
 	for iterator.Valid() {
-		var keyValue = sha256.Sum256(append(iterator.Key(), iterator.Value()...))
-		result = sha256.Sum256(append(result[:], keyValue[:]...))
+		keyStr := bytesToBase64(iterator.Key())
+		valStr := bytesToBase64(iterator.Value())
+		entry := []string{keyStr, valStr}
+		result = append(result, strings.Join(entry, ":"))
 		iterator.Next()
 	}
-	return bytesToBase64(result[:])
+	return strings.Join(result, ";")
 }
 
 func iteratorEquals(iterator1, iterator2 types.Iterator) bool {
@@ -336,19 +345,23 @@ func (is *Store) Iterator(start, end []byte) (it types.Iterator, err error) {
 	if is.isMutable {
 		it, err = is.stateIterator(start, end)
 	} else {
-		// If we're logging operations and mocking pruning
-		if is.logOperation && is.mockPruning {
-			it, err = is.appDBIterator(start, end)
-			if err != nil {
-				fmt.Println(err)
-			}
-			opRecord := []string{"##ITE", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(start), bytesToBase64(end), iteratorOutputHash(it)}
-			logOperation(opRecord)
+		if is.isHistoricalQuery() {
+			// If we're logging operations and mocking pruning
+			if is.logOperation && is.mockPruning {
+				it, err = is.appDBIterator(start, end)
+				if err != nil {
+					fmt.Println(err)
+				}
+				opRecord := []string{"##ITE", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(start), bytesToBase64(end), iteratorOutputHash(it)}
+				logOperation(opRecord)
 
-			it, err = is.appDBIterator(start, end)
+				it, err = is.appDBIterator(start, end)
+			} else {
+				// We're just doing a plain old historical query
+				it, err = is.sqLiteDB.IteratorMutable(is.height-1, is.storeKey, start, end)
+			}
 		} else {
-			// We're just doing a plain old historical query
-			it, err = is.sqLiteDB.IteratorMutable(is.height-1, is.storeKey, start, end)
+			it, err = is.appDBIterator(start, end)
 		}
 	}
 
@@ -408,19 +421,23 @@ func (is *Store) ReverseIterator(start, end []byte) (it types.Iterator, err erro
 		it, err = is.stateReverseIterator(start, end)
 		//return is.stateReverseIterator(start, end)
 	} else {
-		// If we're logging operations and mocking pruning
-		if is.logOperation && is.mockPruning {
-			it, err = is.appDBReverseIterator(start, end)
-			if err != nil {
-				fmt.Println(err)
-			}
-			opRecord := []string{"##RIT", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(start), bytesToBase64(end), iteratorOutputHash(it)}
-			logOperation(opRecord)
+		if is.isHistoricalQuery() {
+			// If we're logging operations and mocking pruning
+			if is.logOperation && is.mockPruning {
+				it, err = is.appDBReverseIterator(start, end)
+				if err != nil {
+					fmt.Println(err)
+				}
+				opRecord := []string{"##RIT", is.storeKey, strconv.FormatInt(is.height-1, 10), bytesToBase64(start), bytesToBase64(end), iteratorOutputHash(it)}
+				logOperation(opRecord)
 
-			it, err = is.appDBReverseIterator(start, end)
+				it, err = is.appDBReverseIterator(start, end)
+			} else {
+				// We're just doing a plain old historical query
+				it, err = is.sqLiteDB.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
+			}
 		} else {
-			// We're just doing a plain old historical query
-			it, err = is.sqLiteDB.ReverseIteratorMutable(is.height-1, is.storeKey, start, end)
+			it, err = is.appDBReverseIterator(start, end)
 		}
 	}
 
