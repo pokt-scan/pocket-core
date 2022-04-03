@@ -713,6 +713,8 @@ func TestSendTransaction(t *testing.T) {
 			if tc.upgrades != nil { // NOTE: Use to perform neccesary upgrades for test
 				codec.UpgradeHeight = tc.upgrades.codecUpgrade.height
 				_ = memCodecMod(tc.upgrades.codecUpgrade.upgradeMod)
+				codec.UpgradeFeatureMap[codec.TxCacheEnhancementKey] = tc.codecUpgrade.height
+
 			}
 			_, kb, cleanup := tc.memoryNodeFn(t, oneAppTwoNodeGenesis())
 			time.Sleep(1 * time.Second)

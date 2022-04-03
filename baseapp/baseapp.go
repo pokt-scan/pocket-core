@@ -790,6 +790,8 @@ func (app *BaseApp) DeliverTx(req abci.RequestDeliverTx) (res abci.ResponseDeliv
 
 	if _, ok := app.transactionCache[TxCacheKey(req.Tx, runTxModeDeliver)]; ok {
 		duplicateTransaction = true
+	} else {
+		app.transactionCache[TxCacheKey(req.Tx, runTxModeDeliver)] = struct{}{}
 	}
 	tx, err := app.txDecoder(req.Tx, app.LastBlockHeight())
 	if err != nil {
