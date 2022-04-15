@@ -103,7 +103,7 @@ func SortJSON(toSortJSON []byte) string {
 	return string(js)
 }
 
-func UnmarshalTxStr(txStr string, height int64) types.StdTx {
+func UnmarshalTxStr(txStr string, height int64) (types.StdTx, error) {
 	txBytes, err := base64.StdEncoding.DecodeString(txStr)
 	if err != nil {
 		log.Fatal("error:", err)
@@ -111,11 +111,11 @@ func UnmarshalTxStr(txStr string, height int64) types.StdTx {
 	return UnmarshalTx(txBytes, height)
 }
 
-func UnmarshalTx(txBytes []byte, height int64) types.StdTx {
+func UnmarshalTx(txBytes []byte, height int64) (types.StdTx, error) {
 	defaultTxDecoder := auth.DefaultTxDecoder(cdc)
 	tx, err := defaultTxDecoder(txBytes, height)
 	if err != nil {
-		log.Fatalf("Could not decode transaction: " + err.Error())
+		return types.StdTx{}, err
 	}
-	return tx.(auth.StdTx)
+	return tx.(auth.StdTx), nil
 }

@@ -3,6 +3,7 @@ package rpc
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	sdk "github.com/pokt-network/pocket-core/types"
 	types2 "github.com/pokt-network/pocket-core/x/auth/types"
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -99,7 +100,10 @@ func Tx(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		WriteErrorResponse(w, 400, err.Error())
 		return
 	}
-	rpcResponse := ResultTxToRPC(res)
+	rpcResponse, err := ResultTxToRPC(res)
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+	}
 	s, er := json.MarshalIndent(rpcResponse, "", "  ")
 	if er != nil {
 		WriteErrorResponse(w, 400, er.Error())
@@ -176,16 +180,24 @@ func ResultTxSearchToRPC(res *core_types.ResultTxSearch) RPCResultTxSearch {
 		TotalCount: res.TotalCount,
 	}
 	for _, result := range res.Txs {
-		rpcTxSearch.Txs = append(rpcTxSearch.Txs, ResultTxToRPC(result))
+		res, err := ResultTxToRPC(result)
+		if err != nil {
+			fmt.Println("an error occurred unmarshalling transaction result: ", hex.EncodeToString(res.Hash))
+			continue
+		}
+		rpcTxSearch.Txs = append(rpcTxSearch.Txs, res)
 	}
 	return rpcTxSearch
 }
 
-func ResultTxToRPC(res *core_types.ResultTx) *RPCResultTx {
+func ResultTxToRPC(res *core_types.ResultTx) (*RPCResultTx, error) {
 	if res == nil {
-		return nil
+		return nil, nil
 	}
-	tx := app.UnmarshalTx(res.Tx, res.Height)
+	tx, err := app.UnmarshalTx(res.Tx, res.Height)
+	if err != nil {
+		return nil, err
+	}
 	if app.GlobalConfig.PocketConfig.DisableTxEvents {
 		res.TxResult.Events = nil
 	}
@@ -210,7 +222,7 @@ func ResultTxToRPC(res *core_types.ResultTx) *RPCResultTx {
 		Proof:    res.Proof,
 		StdTx:    rpcStdTx,
 	}
-	return r
+	return r, nil
 }
 
 func AccountTxs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
