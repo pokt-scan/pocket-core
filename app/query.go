@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"reflect"
 	"strconv"
@@ -72,6 +73,7 @@ func (app PocketCoreApp) QueryRecipientTxs(addr string, page, perPage int, prove
 }
 
 func (app PocketCoreApp) QueryBlockTxs(height int64, page, perPage int, prove bool, sort string) (res *core_types.ResultTxSearch, err error) {
+	log.Println("SDL: QueryBlockTxs Called!")
 	tmClient := app.GetClient()
 	defer func() { _ = tmClient.Stop() }()
 	query := fmt.Sprintf(txHeightQuery, height)

@@ -11,17 +11,18 @@ import (
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
+	"log"
 	"math"
 )
 
 var (
-	_           txindex.TxIndexer = &TransactionIndexer{}
+	_ txindex.TxIndexer = &TransactionIndexer{}
 	// Since LevelDB comparators order lexicongraphically, the implementation uses ELEN to encode numbers to ensure alphanumerical
 	// ordering at insertion time. https://www.zanopha.com/docs/elen.pdf
 	// Since the keys are sorted alphanumerically from the start, we don't have to:
 	// (a) load all results to memory (b) paginate and sort transactions after
 	// This indexer inserts in sorted order so it can paginate and return based on the db iterator
-	elenEncoder                   = lexnum.NewEncoder('=', '-')
+	elenEncoder = lexnum.NewEncoder('=', '-')
 )
 
 const (
@@ -114,14 +115,17 @@ func (t *TransactionIndexer) Get(hash []byte) (*types.TxResult, error) {
 		return nil, txindex.ErrorEmptyHash
 	}
 
-	rawBytes, _ := t.store.Get(hash)
+	rawBytes, err := t.store.Get(hash)
+	log.Printf("SDL: error inside of TransactionIndexer.Get() %v", err)
 	if rawBytes == nil {
+		log.Println("SDL: BYTES ARE NIL!!!!!!")
 		return nil, nil
 	}
 
 	txResult := new(types.TxResult)
-	err := cdc.UnmarshalBinaryBare(rawBytes, &txResult, 0)
+	err = cdc.UnmarshalBinaryBare(rawBytes, &txResult, 0)
 	if err != nil {
+		log.Println("SDL: AN ERROR OCCURRED DURING THE UNMARSHALLING!!!!")
 		return nil, fmt.Errorf("error reading TxResult: %v", err)
 	}
 
@@ -146,7 +150,13 @@ func (t *TransactionIndexer) Search(ctx context.Context, q *query.Query) ([]*typ
 
 	switch condition.CompositeKey {
 	case TxHeightKey:
-		return t.heightQuery(condition, q.Pagination)
+		res, err := t.heightQuery(condition, q.Pagination)
+		log.Println("SDL: Search results: ")
+		for _, r := range res {
+			log.Printf("SDL: %v\n", r)
+		}
+		log.Printf("SDL: Error: %v\n", err)
+		return res, err
 	case TxSignerKey:
 		return t.signerQuery(condition, q.Pagination)
 	case TxRecipientKey:
