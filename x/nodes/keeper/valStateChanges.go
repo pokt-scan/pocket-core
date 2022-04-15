@@ -141,7 +141,7 @@ func (k Keeper) ValidateValidatorStaking(ctx sdk.Ctx, validator types.Validator,
 		}
 		// edit stake in 6.X upgrade
 		if ctx.IsAfterUpgradeHeight() && val.IsStaked() {
-			return k.ValidateEditStake(ctx, val, validator, amount)
+			return k.ValidateEditStake(ctx, val, validator, amount, signerAddress)
 		}
 		if !val.IsUnstaked() { // unstaking or already staked but before the upgrade
 			return types.ErrValidatorStatus(k.codespace)
@@ -165,9 +165,16 @@ func (k Keeper) ValidateValidatorStaking(ctx sdk.Ctx, validator types.Validator,
 	if amount.LT(sdk.NewInt(k.MinimumStake(ctx))) {
 		return types.ErrMinimumStake(k.codespace)
 	}
-	if !k.AccountKeeper.HasCoins(ctx, validator.Address, coin) {
-		return types.ErrNotEnoughCoins(k.codespace)
+	if k.Cdc.IsAfterNonCustodialUpgrade(ctx.BlockHeight()) {
+		if !k.AccountKeeper.HasCoins(ctx, signerAddress, coin) {
+			return types.ErrNotEnoughCoins(k.codespace)
+		}
+	} else {
+		if !k.AccountKeeper.HasCoins(ctx, validator.Address, coin) {
+			return types.ErrNotEnoughCoins(k.codespace)
+		}
 	}
+
 	return nil
 }
 
@@ -187,7 +194,7 @@ func ValidateValidatorMsgSigner(validator types.Validator, signerAddress sdk.Add
 }
 
 // ValidateEditStake - Validate the updates to a current staked validator
-func (k Keeper) ValidateEditStake(ctx sdk.Ctx, currentValidator, newValidtor types.Validator, amount sdk.BigInt) sdk.Error {
+func (k Keeper) ValidateEditStake(ctx sdk.Ctx, currentValidator, newValidtor types.Validator, amount sdk.BigInt, signer sdk.Address) sdk.Error {
 	// ensure not staking less
 	diff := amount.Sub(currentValidator.StakedTokens)
 	if diff.IsNegative() {
@@ -197,8 +204,14 @@ func (k Keeper) ValidateEditStake(ctx sdk.Ctx, currentValidator, newValidtor typ
 	if !diff.IsZero() {
 		// ensure account has enough coins for bump
 		coin := sdk.NewCoins(sdk.NewCoin(k.StakeDenom(ctx), diff))
-		if !k.AccountKeeper.HasCoins(ctx, currentValidator.Address, coin) {
-			return types.ErrNotEnoughCoins(k.Codespace())
+		if k.Cdc.IsAfterNonCustodialUpgrade(ctx.BlockHeight()) {
+			if !k.AccountKeeper.HasCoins(ctx, signer, coin) {
+				return types.ErrNotEnoughCoins(k.Codespace())
+			}
+		} else {
+			if !k.AccountKeeper.HasCoins(ctx, currentValidator.Address, coin) {
+				return types.ErrNotEnoughCoins(k.Codespace())
+			}
 		}
 	}
 	if k.Cdc.IsAfterNonCustodialUpgrade(ctx.BlockHeight()) {
