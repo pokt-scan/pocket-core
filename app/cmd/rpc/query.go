@@ -182,7 +182,7 @@ func ResultTxSearchToRPC(res *core_types.ResultTxSearch) RPCResultTxSearch {
 	for _, result := range res.Txs {
 		res, err := ResultTxToRPC(result)
 		if err != nil {
-			fmt.Println("an error occurred unmarshalling transaction result: ", hex.EncodeToString(res.Hash))
+			fmt.Println("an error occurred unmarshalling transaction result")
 			continue
 		}
 		rpcTxSearch.Txs = append(rpcTxSearch.Txs, res)
