@@ -476,7 +476,7 @@ Prompts the user for <fromAddr> account passphrase.`,
 			fmt.Println(err)
 			return
 		}
-		fmt.Println(j)
+		fmt.Println(string(j))
 		resp, err := QueryRPC(SendRawTxPath, j)
 		if err != nil {
 			fmt.Println(err)
