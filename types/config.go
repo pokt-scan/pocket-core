@@ -146,7 +146,7 @@ func DefaultConfig(dataDir string) Config {
 	c.TendermintConfig.RPC.GRPCMaxOpenConnections = 2500
 	c.TendermintConfig.RPC.MaxOpenConnections = 2500
 	c.TendermintConfig.Mempool.Size = 9000
-	c.TendermintConfig.Mempool.CacheSize = 9000
+	c.TendermintConfig.Mempool.CacheSize = 0
 	c.TendermintConfig.FastSync = &config.FastSyncConfig{
 		Version: "v1",
 	}
