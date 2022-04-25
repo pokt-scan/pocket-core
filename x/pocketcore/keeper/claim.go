@@ -93,7 +93,7 @@ func (k Keeper) ValidateClaim(ctx sdk.Ctx, claim pc.MsgClaim) (err sdk.Error) {
 	// get the session context (state info at the beginning of the session)
 	sessionContext, er := ctx.PrevCtx(claim.SessionHeader.SessionBlockHeight)
 	if er != nil {
-		return sdk.ErrInternal(er.Error())
+		return pc.NewExpiredProofsSubmissionError(pc.ModuleName)
 	}
 	// ensure that session ended
 	sessionEndHeight := claim.SessionHeader.SessionBlockHeight + k.BlocksPerSession(sessionContext) - 1
@@ -127,11 +127,11 @@ func (k Keeper) ValidateClaim(ctx sdk.Ctx, claim pc.MsgClaim) (err sdk.Error) {
 		// use the session end context to ensure that people who were jailed mid session do not get to submit claims
 		sessionEndCtx, er := ctx.PrevCtx(sessionEndHeight)
 		if er != nil {
-			return sdk.ErrInternal("could not get prev context: " + er.Error())
+			return pc.NewExpiredProofsSubmissionError(pc.ModuleName)
 		}
 		hash, er := sessionContext.BlockHash(k.Cdc, sessionContext.BlockHeight())
 		if er != nil {
-			return sdk.ErrInternal(er.Error())
+			return pc.NewExpiredProofsSubmissionError(pc.ModuleName)
 		}
 		// create a new session to validate
 		session, err = pc.NewSession(sessionContext, sessionEndCtx, k.posKeeper, claim.SessionHeader, hex.EncodeToString(hash), sessionNodeCount)
