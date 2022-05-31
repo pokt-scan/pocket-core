@@ -157,7 +157,7 @@ func TestRelayProof_ValidateLocal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.proof.(RelayProof).ValidateLocal([]string{getTestSupportedBlockchain()}, tt.sessionNodeCount, 1, sdk.Address(verifyAddr)) != nil, tt.hasError)
+			assert.Equal(t, tt.proof.(RelayProof).ValidateLocal([]string{getTestSupportedBlockchain()}, tt.sessionNodeCount, 1, []sdk.Address{sdk.Address(verifyAddr)}) != nil, tt.hasError)
 		})
 	}
 }
@@ -516,7 +516,7 @@ func TestChallengeProofInvalidData_ValidateLocal(t *testing.T) {
 				Chain:              tt.proof.MinorityResponse.Proof.Blockchain,
 				SessionBlockHeight: tt.proof.MinorityResponse.Proof.SessionBlockHeight,
 			}
-			if err := tt.proof.ValidateLocal(h, tt.maxRelays, tt.supportedBlockchains, 5, tt.sessionNodes, tt.reporterAddress); (err != nil) != tt.hasError {
+			if err := tt.proof.ValidateLocal(h, tt.maxRelays, tt.supportedBlockchains, 5, tt.sessionNodes, []sdk.Address{tt.reporterAddress}); (err != nil) != tt.hasError {
 				fmt.Println(tt.name)
 				fmt.Println(err)
 				t.Fatalf(err.Error())

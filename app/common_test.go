@@ -245,9 +245,9 @@ func inMemTendermintNode(genesisState []byte) (*node.Node, keys.Keybase) {
 	}
 	nodeKey := p2p.NodeKey{PrivKey: pk}
 	privVal := GenFilePV(c.TmConfig.PrivValidatorKey, c.TmConfig.PrivValidatorState)
-	privVal.Key.PrivKey = pk
-	privVal.Key.PubKey = pk.PubKey()
-	privVal.Key.Address = pk.PubKey().Address()
+	privVal.Key[0].PrivKey = pk
+	privVal.Key[0].PubKey = pk.PubKey()
+	privVal.Key[0].Address = pk.PubKey().Address()
 	pocketTypes.InitPVKeyFile(privVal.Key)
 
 	dbProvider := func(*node.DBContext) (dbm.DB, error) {
@@ -281,7 +281,7 @@ func inMemTendermintNode(genesisState []byte) (*node.Node, keys.Keybase) {
 
 // GenFilePV generates a new validator with randomly generated private key
 // and sets the filePaths, but does not call Save().
-func GenFilePV(keyFilePath, stateFilePath string) *privval.FilePV {
+func GenFilePV(keyFilePath, stateFilePath string) *privval.FilePVLite {
 	return privval.GenFilePV(keyFilePath, stateFilePath)
 }
 

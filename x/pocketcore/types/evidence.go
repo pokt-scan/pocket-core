@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 
 // "Evidence" - A proof of work/burn for nodes.
 type Evidence struct {
+	Address       types.Address
 	Bloom         bloom.BloomFilter        `json:"bloom_filter"` // used to check if proof contains
 	SessionHeader `json:"evidence_header"` // the session h serves as an identifier for the evidence
 	NumOfProofs   int64                    `json:"num_of_proofs"` // the total number of proofs in the evidence
@@ -21,12 +23,14 @@ type Evidence struct {
 func (e Evidence) IsSealed() bool {
 	globalEvidenceCache.l.Lock()
 	defer globalEvidenceCache.l.Unlock()
-	_, ok := globalEvidenceSealedMap.Load(e.HashString())
+	bz, _ := KeyForEvidence(e.Address, e.SessionHeader, e.EvidenceType)
+	_, ok := globalEvidenceSealedMap.Load(hex.EncodeToString(bz))
 	return ok
 }
 
 func (e Evidence) Seal() CacheObject {
-	globalEvidenceSealedMap.Store(e.HashString(), struct{}{})
+	bz, _ := KeyForEvidence(e.Address, e.SessionHeader, e.EvidenceType)
+	globalEvidenceSealedMap.Store(hex.EncodeToString(bz), struct{}{})
 	return e
 }
 
@@ -85,6 +89,7 @@ func (e Evidence) LegacyAminoMarshal() ([]byte, error) {
 }
 
 func (e Evidence) LegacyAminoUnmarshal(b []byte) (CacheObject, error) {
+	// TODO DEPRECATE
 	ep := evidence{}
 	err := ModuleCdc.UnmarshalBinaryBare(b, &ep, 0)
 	if err != nil {
@@ -169,6 +174,7 @@ func (e *Evidence) ToProto() (*ProtoEvidence, error) {
 		return nil, err
 	}
 	return &ProtoEvidence{
+		Address:       e.Address,
 		BloomBytes:    encodedBloom,
 		SessionHeader: &e.SessionHeader,
 		NumOfProofs:   e.NumOfProofs,
@@ -184,11 +190,13 @@ func (pe *ProtoEvidence) FromProto() (Evidence, error) {
 		return Evidence{}, fmt.Errorf("could not unmarshal into ProtoEvidence from cache, bloom bytes gob decode: %s", err.Error())
 	}
 	return Evidence{
+		Address:       pe.Address,
 		Bloom:         bloomFilter,
 		SessionHeader: *pe.SessionHeader,
 		NumOfProofs:   pe.NumOfProofs,
 		Proofs:        pe.Proofs.FromProofI(),
-		EvidenceType:  pe.EvidenceType}, nil
+		EvidenceType:  pe.EvidenceType,
+	}, nil
 }
 
 func (e Evidence) MarshalObject() ([]byte, error) {
@@ -209,7 +217,7 @@ func (e Evidence) UnmarshalObject(b []byte) (CacheObject, error) {
 }
 
 func (e Evidence) Key() ([]byte, error) {
-	return KeyForEvidence(e.SessionHeader, e.EvidenceType)
+	return KeyForEvidence(e.Address, e.SessionHeader, e.EvidenceType)
 }
 
 // "EvidenceType" type to distinguish the types of GOBEvidence (relay/challenge)

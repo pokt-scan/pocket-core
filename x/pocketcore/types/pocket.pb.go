@@ -278,6 +278,7 @@ func (*ProofI) XXX_OneofWrappers() []interface{} {
 }
 
 type ProtoEvidence struct {
+	Address       github_com_pokt_network_pocket_core_types.Address `protobuf:"bytes,1,opt,name=address,proto3" json:"address"`
 	BloomBytes    []byte         `protobuf:"bytes,1,opt,name=bloomBytes,proto3" json:"bloom_bytes"`
 	SessionHeader *SessionHeader `protobuf:"bytes,2,opt,name=sessionHeader,proto3" json:"evidence_header"`
 	NumOfProofs   int64          `protobuf:"varint,3,opt,name=numOfProofs,proto3" json:"num_of_proofs"`

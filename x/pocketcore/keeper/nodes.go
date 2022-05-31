@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/pokt-network/pocket-core/crypto"
 	sdk "github.com/pokt-network/pocket-core/types"
 	"github.com/pokt-network/pocket-core/x/nodes/exported"
@@ -16,33 +18,44 @@ func (k Keeper) GetNode(ctx sdk.Ctx, address sdk.Address) (n exported.ValidatorI
 	return n, true
 }
 
-func (k Keeper) GetSelfAddress(ctx sdk.Ctx) sdk.Address {
-	kp, err := k.GetPKFromFile(ctx)
+func (k Keeper) GetSelfAddress(ctx sdk.Ctx) (addrs sdk.Addresses) {
+	pvKey, err := pc.GetPVKeyFile()
 	if err != nil {
-		ctx.Logger().Error("Unable to retrieve selfAddress: " + err.Error())
+		ctx.Logger().Error("Unable to retrieve pk from file: " + err.Error())
 		return nil
 	}
-	return sdk.Address(kp.PublicKey().Address())
+	for _, k := range pvKey {
+		addrs = append(addrs, sdk.Address(k.Address))
+	}
+	return
 }
 
-func (k Keeper) GetSelfPrivKey(ctx sdk.Ctx) (crypto.PrivateKey, sdk.Error) {
+func (k Keeper) GetSelfPrivKey(ctx sdk.Ctx) ([]crypto.PrivateKey, sdk.Error) {
 	// get the private key from the private validator file
-	pk, er := k.GetPKFromFile(ctx)
+	pk, er := k.GetPKsFromFile(ctx)
 	if er != nil {
 		return nil, pc.NewKeybaseError(pc.ModuleName, er)
 	}
 	return pk, nil
 }
 
-// "GetSelfNode" - Gets self node (private val key) from the world state
-func (k Keeper) GetSelfNode(ctx sdk.Ctx) (node exported.ValidatorI, er sdk.Error) {
-	// get the node from the world state
-	self, found := k.GetNode(ctx, k.GetSelfAddress(ctx))
-	if !found {
-		er = pc.NewSelfNotFoundError(pc.ModuleName)
-		return nil, er
+func (k Keeper) GetSelfPrivKeyFromAddr(ctx sdk.Ctx, signer sdk.Address) (crypto.PrivateKey, sdk.Error) {
+	// get the private key from the private validator file
+	pvKey, err := pc.GetPVKeyFile()
+	if err != nil {
+		ctx.Logger().Error("Unable to retrieve pk from file: " + err.Error())
+		return nil, err
 	}
-	return self, nil
+	for _, k := range pvKey {
+		if bytes.Equal(k.Address.Bytes(), signer) {
+			key, err := crypto.PrivKeyToPrivateKey(k.PrivKey)
+			if err != nil {
+				return nil, sdk.ErrInternal(err.Error())
+			}
+			return key, nil
+		}
+	}
+	return nil, sdk.ErrInternal(fmt.Sprintf("private key not found in file for address: %s", signer.String()))
 }
 
 // "AwardCoinsForRelays" - Award coins to nodes for relays completed using the nodes keeper

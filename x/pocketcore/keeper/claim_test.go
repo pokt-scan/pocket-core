@@ -1,9 +1,9 @@
 package keeper
 
 import (
+	"github.com/pokt-network/pocket-core/crypto"
 	"testing"
 
-	"github.com/pokt-network/pocket-core/crypto"
 	sdk "github.com/pokt-network/pocket-core/types"
 	"github.com/pokt-network/pocket-core/x/pocketcore/types"
 	"github.com/stretchr/testify/assert"
@@ -11,8 +11,8 @@ import (
 
 func TestKeeper_GetSetClaim(t *testing.T) {
 	ctx, _, _, _, keeper, _, _ := createTestInput(t, false)
-	npk, header, _ := simulateRelays(t, keeper, &ctx, 5)
-	evidence, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(100000))
+	npk, header, _ := simulateRelays(t, keeper, &ctx, 5, 0)
+	evidence, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(100000), sdk.Address(npk.Address()))
 	assert.Nil(t, err)
 	claim := types.MsgClaim{
 		SessionHeader: header,
@@ -39,14 +39,14 @@ func TestKeeper_GetSetDeleteClaims(t *testing.T) {
 	var pubKeys []crypto.PublicKey
 
 	for i := 0; i < 2; i++ {
-		npk, header, _ := simulateRelays(t, keeper, &ctx, 5)
-		evidence, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(1000))
+		npk, header, _ := simulateRelays(t, keeper, &ctx, 5, i)
+		evidence, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(1000), sdk.Address(npk.Address()))
 		assert.Nil(t, err)
 		claim := types.MsgClaim{
 			SessionHeader: header,
-			MerkleRoot:    evidence.GenerateMerkleRoot(0),
+			MerkleRoot:    evidence.GenerateMerkleRoot(1),
 			TotalProofs:   9,
-			FromAddress:   sdk.Address(sdk.Address(npk.Address())),
+			FromAddress:   sdk.Address(npk.Address()),
 			EvidenceType:  types.RelayEvidence,
 		}
 		claims = append(claims, claim)
@@ -67,12 +67,11 @@ func TestKeeper_GetSetDeleteClaims(t *testing.T) {
 
 func TestKeeper_GetMatureClaims(t *testing.T) {
 	ctx, _, _, _, keeper, keys, _ := createTestInput(t, false)
-	npk, header, _ := simulateRelays(t, keeper, &ctx, 5)
-	npk2, header2, _ := simulateRelays(t, keeper, &ctx, 20)
-
-	i, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(1000))
+	npk, header, _ := simulateRelays(t, keeper, &ctx, 5, 0)
+	npk2, header2, _ := simulateRelays(t, keeper, &ctx, 20, 1)
+	i, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(1000), sdk.Address(npk.Address()))
 	assert.Nil(t, err)
-	i2, err := types.GetEvidence(header2, types.RelayEvidence, sdk.NewInt(1000))
+	i2, err := types.GetEvidence(header2, types.RelayEvidence, sdk.NewInt(1000), sdk.Address(npk2.Address()))
 	assert.Nil(t, err)
 
 	matureClaim := types.MsgClaim{
@@ -114,12 +113,11 @@ func TestKeeper_GetMatureClaims(t *testing.T) {
 
 func TestKeeper_DeleteExpiredClaims(t *testing.T) {
 	ctx, _, _, _, keeper, keys, _ := createTestInput(t, false)
-	npk, header, _ := simulateRelays(t, keeper, &ctx, 5)
-	npk2, header2, _ := simulateRelays(t, keeper, &ctx, 20)
-
-	i, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(1000))
+	npk, header, _ := simulateRelays(t, keeper, &ctx, 5, 0)
+	npk2, header2, _ := simulateRelays(t, keeper, &ctx, 20, 1)
+	i, err := types.GetEvidence(header, types.RelayEvidence, sdk.NewInt(1000), sdk.Address(npk.Address()))
 	assert.Nil(t, err)
-	i2, err := types.GetEvidence(header2, types.RelayEvidence, sdk.NewInt(1000))
+	i2, err := types.GetEvidence(header2, types.RelayEvidence, sdk.NewInt(1000), sdk.Address(npk2.Address()))
 	assert.Nil(t, err)
 	expiredClaim := types.MsgClaim{
 		SessionHeader: header,

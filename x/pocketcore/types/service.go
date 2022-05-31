@@ -25,36 +25,36 @@ type Relay struct {
 }
 
 // "Validate" - Checks the validity of a relay request using store data
-func (r *Relay) Validate(ctx sdk.Ctx, posKeeper PosKeeper, appsKeeper AppsKeeper, pocketKeeper PocketKeeper, node sdk.Address, hb *HostedBlockchains, sessionBlockHeight int64) (maxPossibleRelays sdk.BigInt, err sdk.Error) {
+func (r *Relay) Validate(ctx sdk.Ctx, posKeeper PosKeeper, appsKeeper AppsKeeper, pocketKeeper PocketKeeper, selfAddrs []sdk.Address, hb *HostedBlockchains, sessionBlockHeight int64) (addr sdk.Address, maxPossibleRelays sdk.BigInt, err sdk.Error) {
 	// validate payload
 	if err := r.Payload.Validate(); err != nil {
-		return sdk.ZeroInt(), NewEmptyPayloadDataError(ModuleName)
+		return nil, sdk.ZeroInt(), NewEmptyPayloadDataError(ModuleName)
 	}
 	// validate the metadata
 	if err := r.Meta.Validate(ctx); err != nil {
-		return sdk.ZeroInt(), err
+		return nil, sdk.ZeroInt(), err
 	}
 	// validate the relay merkleHash = request merkleHash
 	if r.Proof.RequestHash != r.RequestHashString() {
-		return sdk.ZeroInt(), NewRequestHashError(ModuleName)
+		return nil, sdk.ZeroInt(), NewRequestHashError(ModuleName)
 	}
 	// ensure the blockchain is supported locally
 	if !hb.Contains(r.Proof.Blockchain) {
-		return sdk.ZeroInt(), NewUnsupportedBlockchainNodeError(ModuleName)
+		return nil, sdk.ZeroInt(), NewUnsupportedBlockchainNodeError(ModuleName)
 	}
 	// ensure session block height == one in the relay proof
 	if r.Proof.SessionBlockHeight != sessionBlockHeight {
-		return sdk.ZeroInt(), NewInvalidBlockHeightError(ModuleName)
+		return nil, sdk.ZeroInt(), NewInvalidBlockHeightError(ModuleName)
 	}
 	// get the session context
 	sessionCtx, er := ctx.PrevCtx(sessionBlockHeight)
 	if er != nil {
-		return sdk.ZeroInt(), sdk.ErrInternal(er.Error())
+		return nil, sdk.ZeroInt(), sdk.ErrInternal(er.Error())
 	}
 	// get the application that staked on behalf of the client
 	app, found := GetAppFromPublicKey(sessionCtx, appsKeeper, r.Proof.Token.ApplicationPublicKey)
 	if !found {
-		return sdk.ZeroInt(), NewAppNotFoundError(ModuleName)
+		return nil, sdk.ZeroInt(), NewAppNotFoundError(ModuleName)
 	}
 	// get session node count from that session height
 	sessionNodeCount := pocketKeeper.SessionNodeCount(sessionCtx)
@@ -66,49 +66,49 @@ func (r *Relay) Validate(ctx sdk.Ctx, posKeeper PosKeeper, appsKeeper AppsKeeper
 		Chain:              r.Proof.Blockchain,
 		SessionBlockHeight: r.Proof.SessionBlockHeight,
 	}
-	// validate unique relay
-	evidence, totalRelays := GetTotalProofs(header, RelayEvidence, maxPossibleRelays)
-	if evidence.IsSealed() {
-		return sdk.ZeroInt(), NewSealedEvidenceError(ModuleName)
-	}
-	// get evidence key by proof
-	if !IsUniqueProof(r.Proof, evidence) {
-		return sdk.ZeroInt(), NewDuplicateProofError(ModuleName)
-	}
-	// validate not over service
-	if sdk.NewInt(totalRelays).GTE(maxPossibleRelays) {
-		return sdk.ZeroInt(), NewOverServiceError(ModuleName)
-	}
-	// validate the Proof
-	if err := r.Proof.ValidateLocal(app.GetChains(), int(sessionNodeCount), sessionBlockHeight, node); err != nil {
-		return sdk.ZeroInt(), err
-	}
 	// check cache
 	session, found := GetSession(header)
 	// if not found generate the session
 	if !found {
 		bh, err := sessionCtx.BlockHash(pocketKeeper.Codec(), sessionCtx.BlockHeight())
 		if err != nil {
-			return sdk.ZeroInt(), sdk.ErrInternal(err.Error())
+			return nil, sdk.ZeroInt(), sdk.ErrInternal(err.Error())
 		}
 		var er sdk.Error
 		session, er = NewSession(sessionCtx, ctx, posKeeper, header, hex.EncodeToString(bh), int(sessionNodeCount))
 		if er != nil {
-			return sdk.ZeroInt(), er
+			return nil, sdk.ZeroInt(), er
 		}
 		// add to cache
 		SetSession(session)
 	}
 	// validate the session
-	err = session.Validate(node, app, int(sessionNodeCount))
+	signerAddr, err := session.Validate(selfAddrs, app, int(sessionNodeCount))
 	if err != nil {
-		return sdk.ZeroInt(), err
+		return nil, sdk.ZeroInt(), err
+	}
+	// validate unique relay
+	evidence, totalRelays := GetTotalProofs(header, RelayEvidence, maxPossibleRelays, signerAddr)
+	if evidence.IsSealed() {
+		return nil, sdk.ZeroInt(), NewSealedEvidenceError(ModuleName)
+	}
+	// get evidence key by proof
+	if !IsUniqueProof(r.Proof, evidence) {
+		return nil, sdk.ZeroInt(), NewDuplicateProofError(ModuleName)
+	}
+	// validate not over service
+	if sdk.NewInt(totalRelays).GTE(maxPossibleRelays) {
+		return nil, sdk.ZeroInt(), NewOverServiceError(ModuleName)
+	}
+	// validate the Proof
+	if err := r.Proof.ValidateLocal(app.GetChains(), int(sessionNodeCount), sessionBlockHeight, selfAddrs); err != nil {
+		return nil, sdk.ZeroInt(), err
 	}
 	// if the payload method is empty, set it to the default
 	if r.Payload.Method == "" {
 		r.Payload.Method = DEFAULTHTTPMETHOD
 	}
-	return maxPossibleRelays, nil
+	return signerAddr, maxPossibleRelays, nil
 }
 
 // "Execute" - Attempts to do a request on the non-native blockchain specified

@@ -35,7 +35,8 @@ func TestIsUniqueProof(t *testing.T) {
 		Chain:              "0001",
 		SessionBlockHeight: 0,
 	}
-	e, _ := GetEvidence(h, RelayEvidence, sdk.NewInt(100000))
+	addr := getRandomValidatorAddress()
+	e, _ := GetEvidence(h, RelayEvidence, sdk.NewInt(100000), addr)
 	p := RelayProof{
 		Entropy: 1,
 	}
@@ -45,7 +46,7 @@ func TestIsUniqueProof(t *testing.T) {
 	assert.True(t, IsUniqueProof(p, e), "p is unique")
 	e.AddProof(p)
 	SetEvidence(e)
-	e, err := GetEvidence(h, RelayEvidence, sdk.ZeroInt())
+	e, err := GetEvidence(h, RelayEvidence, sdk.ZeroInt(), addr)
 	assert.Nil(t, err)
 	assert.False(t, IsUniqueProof(p, e), "p is no longer unique")
 	assert.True(t, IsUniqueProof(p1, e), "p is unique")
@@ -54,7 +55,8 @@ func TestIsUniqueProof(t *testing.T) {
 
 func TestAllEvidence_AddGetEvidence(t *testing.T) {
 	appPubKey := getRandomPubKey().RawString()
-	servicerPubKey := getRandomPubKey().RawString()
+	servicerPubKey := getRandomPubKey()
+	servierPubKeyString := servicerPubKey.RawString()
 	clientPubKey := getRandomPubKey().RawString()
 	ethereum := hex.EncodeToString([]byte{0001})
 	header := SessionHeader{
@@ -66,7 +68,7 @@ func TestAllEvidence_AddGetEvidence(t *testing.T) {
 		Entropy:            0,
 		RequestHash:        header.HashString(), // fake
 		SessionBlockHeight: 1,
-		ServicerPubKey:     servicerPubKey,
+		ServicerPubKey:     servierPubKeyString,
 		Blockchain:         ethereum,
 		Token: AAT{
 			Version:              "0.0.1",
@@ -76,13 +78,14 @@ func TestAllEvidence_AddGetEvidence(t *testing.T) {
 		},
 		Signature: "",
 	}
-	SetProof(header, RelayEvidence, proof, sdk.NewInt(100000))
-	assert.True(t, reflect.DeepEqual(GetProof(header, RelayEvidence, 0), proof))
+	SetProof(header, RelayEvidence, proof, sdk.NewInt(100000), sdk.Address(servicerPubKey.Address()))
+	assert.True(t, reflect.DeepEqual(GetProof(header, RelayEvidence, 0, sdk.Address(servicerPubKey.Address())), proof))
 }
 
 func TestAllEvidence_DeleteEvidence(t *testing.T) {
 	appPubKey := getRandomPubKey().RawString()
-	servicerPubKey := getRandomPubKey().RawString()
+	servicerPubKey := getRandomPubKey()
+	servicerPubKeyString := servicerPubKey.RawString()
 	clientPubKey := getRandomPubKey().RawString()
 	ethereum := hex.EncodeToString([]byte{0001})
 	header := SessionHeader{
@@ -93,7 +96,7 @@ func TestAllEvidence_DeleteEvidence(t *testing.T) {
 	proof := RelayProof{
 		Entropy:            0,
 		SessionBlockHeight: 1,
-		ServicerPubKey:     servicerPubKey,
+		ServicerPubKey:     servicerPubKeyString,
 		RequestHash:        header.HashString(), // fake
 		Blockchain:         ethereum,
 		Token: AAT{
@@ -104,16 +107,17 @@ func TestAllEvidence_DeleteEvidence(t *testing.T) {
 		},
 		Signature: "",
 	}
-	SetProof(header, RelayEvidence, proof, sdk.NewInt(100000))
-	assert.True(t, reflect.DeepEqual(GetProof(header, RelayEvidence, 0), proof))
-	GetProof(header, RelayEvidence, 0)
-	_ = DeleteEvidence(header, RelayEvidence)
-	assert.Empty(t, GetProof(header, RelayEvidence, 0))
+	SetProof(header, RelayEvidence, proof, sdk.NewInt(100000), sdk.Address(servicerPubKey.Address()))
+	assert.True(t, reflect.DeepEqual(GetProof(header, RelayEvidence, 0, sdk.Address(servicerPubKey.Address())), proof))
+	GetProof(header, RelayEvidence, 0, sdk.Address(servicerPubKey.Address()))
+	_ = DeleteEvidence(header, RelayEvidence, sdk.Address(servicerPubKey.Address()))
+	assert.Empty(t, GetProof(header, RelayEvidence, 0, sdk.Address(servicerPubKey.Address())))
 }
 
 func TestAllEvidence_GetTotalProofs(t *testing.T) {
 	appPubKey := getRandomPubKey().RawString()
-	servicerPubKey := getRandomPubKey().RawString()
+	servicerPubKey := getRandomPubKey()
+	servicerPubKeyString := servicerPubKey.RawString()
 	clientPubKey := getRandomPubKey().RawString()
 	ethereum := hex.EncodeToString([]byte{0001})
 	header := SessionHeader{
@@ -129,7 +133,7 @@ func TestAllEvidence_GetTotalProofs(t *testing.T) {
 	proof := RelayProof{
 		Entropy:            0,
 		SessionBlockHeight: 1,
-		ServicerPubKey:     servicerPubKey,
+		ServicerPubKey:     servicerPubKeyString,
 		RequestHash:        header.HashString(), // fake
 		Blockchain:         ethereum,
 		Token: AAT{
@@ -143,7 +147,7 @@ func TestAllEvidence_GetTotalProofs(t *testing.T) {
 	proof2 := RelayProof{
 		Entropy:            0,
 		SessionBlockHeight: 1,
-		ServicerPubKey:     servicerPubKey,
+		ServicerPubKey:     servicerPubKeyString,
 		RequestHash:        header.HashString(), // fake
 		Blockchain:         ethereum,
 		Token: AAT{
@@ -154,10 +158,10 @@ func TestAllEvidence_GetTotalProofs(t *testing.T) {
 		},
 		Signature: "",
 	}
-	SetProof(header, RelayEvidence, proof, sdk.NewInt(100000))
-	SetProof(header, RelayEvidence, proof2, sdk.NewInt(100000))
-	SetProof(header2, RelayEvidence, proof2, sdk.NewInt(100000)) // different header so shouldn't be counted
-	_, totalRelays := GetTotalProofs(header, RelayEvidence, sdk.NewInt(100000))
+	SetProof(header, RelayEvidence, proof, sdk.NewInt(100000), sdk.Address(servicerPubKey.Address()))
+	SetProof(header, RelayEvidence, proof2, sdk.NewInt(100000), sdk.Address(servicerPubKey.Address()))
+	SetProof(header2, RelayEvidence, proof2, sdk.NewInt(100000), sdk.Address(servicerPubKey.Address())) // different header so shouldn't be counted
+	_, totalRelays := GetTotalProofs(header, RelayEvidence, sdk.NewInt(100000), sdk.Address(servicerPubKey.Address()))
 	assert.Equal(t, totalRelays, int64(2))
 }
 

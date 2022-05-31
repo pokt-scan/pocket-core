@@ -48,7 +48,7 @@ func KeyForClaims(addr sdk.Address) ([]byte, error) {
 }
 
 // "KeyForEvidence" - Generates the key for GOBEvidence
-func KeyForEvidence(header SessionHeader, evidenceType EvidenceType) ([]byte, error) {
+func KeyForEvidence(address sdk.Address, header SessionHeader, evidenceType EvidenceType) ([]byte, error) {
 	// validate the GOBEvidence type
 	if evidenceType != RelayEvidence && evidenceType != ChallengeEvidence {
 		return nil, NewInvalidEvidenceErr(ModuleName)
@@ -57,5 +57,5 @@ func KeyForEvidence(header SessionHeader, evidenceType EvidenceType) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	return append(header.Hash(), et), nil
+	return append(address, append(header.Hash(), et)...), nil
 }

@@ -15,15 +15,11 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 	// get the latest session block height because this relay will correspond with the latest session
 	sessionBlockHeight := k.GetLatestSessionBlockHeight(ctx)
 	// get self node (your validator) from the current state
-	pk, err := k.GetSelfPrivKey(ctx)
-	if err != nil {
-		return nil, err
-	}
-	selfAddr := sdk.Address(pk.PublicKey().Address())
+	selfAddrs := k.GetSelfAddress(ctx)
 	// retrieve the nonNative blockchains your node is hosting
 	hostedBlockchains := k.GetHostedBlockchains()
 	// ensure the validity of the relay
-	maxPossibleRelays, err := relay.Validate(ctx, k.posKeeper, k.appKeeper, k, selfAddr, hostedBlockchains, sessionBlockHeight)
+	signer, maxPossibleRelays, err := relay.Validate(ctx, k.posKeeper, k.appKeeper, k, selfAddrs, hostedBlockchains, sessionBlockHeight)
 	if err != nil {
 		if pc.GlobalPocketConfig.RelayErrors {
 			ctx.Logger().Error(
@@ -35,10 +31,10 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 			)
 			ctx.Logger().Debug(
 				fmt.Sprintf(
-					"could not validate relay for app: %s, for chainID %v on node %s, at session height: %v, with error: %s",
+					"could not validate relay for app: %s, for chainID %v on node(s) %s, at session height: %v, with error: %s",
 					relay.Proof.ServicerPubKey,
 					relay.Proof.Blockchain,
-					selfAddr.String(),
+					selfAddrs.String(),
 					sessionBlockHeight,
 					err.Error(),
 				),
@@ -47,7 +43,7 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 		return nil, err
 	}
 	// store the proof before execution, because the proof corresponds to the previous relay
-	relay.Proof.Store(maxPossibleRelays)
+	relay.Proof.Store(maxPossibleRelays, signer)
 	// attempt to execute
 	respPayload, err := relay.Execute(hostedBlockchains)
 	if err != nil {
@@ -60,11 +56,15 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 		Proof:    relay.Proof,
 	}
 	// sign the response
+	pk, err := k.GetSelfPrivKeyFromAddr(ctx, signer)
+	if err != nil {
+		return nil, err
+	}
 	sig, er := pk.Sign(resp.Hash())
 	if er != nil {
 		ctx.Logger().Error(
 			fmt.Sprintf("could not sign response for address: %s with hash: %v, with error: %s",
-				selfAddr.String(), resp.HashString(), er.Error()),
+				signer, resp.HashString(), er.Error()),
 		)
 		return nil, pc.NewKeybaseError(pc.ModuleName, er)
 	}
@@ -121,7 +121,7 @@ func (k Keeper) HandleChallenge(ctx sdk.Ctx, challenge pc.ChallengeProofInvalidD
 		return nil, err
 	}
 	// store the challenge in memory
-	challenge.Store(app.GetMaxRelays())
+	challenge.Store(app.GetMaxRelays(), selfNode[0])
 	// update metric
 	pc.GlobalServiceMetric().AddChallengeFor(header.Chain)
 	return &pc.ChallengeResponse{Response: fmt.Sprintf("successfully stored challenge proof for %s", challenge.MinorityResponse.Proof.ServicerPubKey)}, nil

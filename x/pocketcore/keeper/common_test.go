@@ -86,14 +86,22 @@ func createTestInput(t *testing.T, isCheckTx bool) (sdk.Ctx, []nodesTypes.Valida
 	assert.Nil(t, err)
 	cb, err := kb.GetCoinbase()
 	assert.Nil(t, err)
+	kp, err := kb.Create("test2")
+	assert.Nil(t, err)
 	addr := tmtypes.Address(cb.GetAddress())
 	pk, err := kb.ExportPrivateKeyObject(cb.GetAddress(), "test")
 	assert.Nil(t, err)
-	types.InitPVKeyFile(privval.FilePVKey{
+	pk2, err := kb.ExportPrivateKeyObject(kp.GetAddress(), "test2")
+	assert.Nil(t, err)
+	types.InitPVKeyFile([]privval.FilePVKeyLite{{
 		Address: addr,
 		PubKey:  cb.PublicKey,
 		PrivKey: pk,
-	})
+	}, {
+		Address: tmtypes.Address(kp.GetAddress()),
+		PubKey:  kp.PublicKey,
+		PrivKey: pk2,
+	}})
 	keyAcc := sdk.NewKVStoreKey(auth.StoreKey)
 	keyParams := sdk.ParamsKey
 	tkeyParams := sdk.ParamsTKey
@@ -359,8 +367,12 @@ func getRandomValidatorAddress() sdk.Address {
 	return sdk.Address(getRandomPubKey().Address())
 }
 
-func simulateRelays(t *testing.T, k Keeper, ctx *sdk.Ctx, maxRelays int) (npk crypto.PublicKey, validHeader types.SessionHeader, keys simulateRelayKeys) {
-	npk = getRandomPubKey()
+func simulateRelays(t *testing.T, k Keeper, ctx *sdk.Ctx, maxRelays, addressIndex int) (npk crypto.PublicKey, validHeader types.SessionHeader, keys simulateRelayKeys) {
+	key, err := k.GetSelfPrivKey(*ctx)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	npk = key[addressIndex].PublicKey()
 	ethereum := hex.EncodeToString([]byte{01})
 	clientKey := getRandomPrivateKey()
 	validHeader = types.SessionHeader{
@@ -376,7 +388,7 @@ func simulateRelays(t *testing.T, k Keeper, ctx *sdk.Ctx, maxRelays int) (npk cr
 	// NOTE Add a minimum of 5 proofs to memInvoice to be able to create a merkle tree
 	for j := 0; j < maxRelays; j++ {
 		proof := createProof(getTestApplicationPrivateKey(), clientKey, npk, ethereum, j)
-		types.SetProof(validHeader, types.RelayEvidence, proof, sdk.NewInt(100000))
+		types.SetProof(validHeader, types.RelayEvidence, proof, sdk.NewInt(100000), sdk.Address(npk.Address()))
 	}
 	mockCtx := new(Ctx)
 	mockCtx.On("KVStore", k.storeKey).Return((*ctx).KVStore(k.storeKey))

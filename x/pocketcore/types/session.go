@@ -41,22 +41,22 @@ func NewSession(sessionCtx, ctx sdk.Ctx, keeper PosKeeper, sessionHeader Session
 }
 
 // "Validate" - Validates a session object
-func (s Session) Validate(node sdk.Address, app appexported.ApplicationI, sessionNodeCount int) sdk.Error {
+func (s Session) Validate(addrs []sdk.Address, app appexported.ApplicationI, sessionNodeCount int) (signer sdk.Address, err sdk.Error) {
 	// validate chain
 	if len(s.SessionHeader.Chain) == 0 {
-		return NewEmptyNonNativeChainError(ModuleName)
+		return nil, NewEmptyNonNativeChainError(ModuleName)
 	}
 	// validate sessionBlockHeight
 	if s.SessionHeader.SessionBlockHeight < 1 {
-		return NewInvalidBlockHeightError(ModuleName)
+		return nil, NewInvalidBlockHeightError(ModuleName)
 	}
 	// validate the app public key
 	if err := PubKeyVerification(s.SessionHeader.ApplicationPubKey); err != nil {
-		return err
+		return nil, err
 	}
 	// validate app corresponds to appPubKey
 	if app.GetPublicKey().RawString() != s.SessionHeader.ApplicationPubKey {
-		return NewInvalidAppPubKeyError(ModuleName)
+		return nil, NewInvalidAppPubKeyError(ModuleName)
 	}
 	// validate app chains
 	chains := app.GetChains()
@@ -68,18 +68,20 @@ func (s Session) Validate(node sdk.Address, app appexported.ApplicationI, sessio
 		}
 	}
 	if !found {
-		return NewUnsupportedBlockchainAppError(ModuleName)
+		return nil, NewUnsupportedBlockchainAppError(ModuleName)
 	}
 	// validate sessionNodes
-	err := s.SessionNodes.Validate(sessionNodeCount)
+	err = s.SessionNodes.Validate(sessionNodeCount)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// validate node is of the session
-	if !s.SessionNodes.Contains(node) {
-		return NewInvalidSessionError(ModuleName)
+	for _, node := range addrs {
+		if s.SessionNodes.Contains(node) {
+			return node, nil
+		}
 	}
-	return nil
+	return nil, NewInvalidSessionError(ModuleName)
 }
 
 var _ CacheObject = Session{} // satisfies the cache object interface

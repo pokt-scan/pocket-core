@@ -15,11 +15,6 @@ import (
 // "SendClaimTx" - Automatically sends a claim of work/challenge based on relays or challenges stored.
 func (k Keeper) SendClaimTx(ctx sdk.Ctx, keeper Keeper, n client.Client, claimTx func(pk crypto.PrivateKey, cliCtx util.CLIContext, txBuilder auth.TxBuilder, header pc.SessionHeader, totalProofs int64, root pc.HashRange, evidenceType pc.EvidenceType) (*sdk.TxResponse, error)) {
 	// get the private val key (main) account from the keybase
-	kp, err := k.GetPKFromFile(ctx)
-	if err != nil {
-		ctx.Logger().Error(fmt.Sprintf("an error occured retrieving the private key from file for the claim transaction:\n%s", err.Error()))
-		return
-	}
 	// retrieve the iterator to go through each piece of evidence in storage
 	iter := pc.EvidenceIterator()
 	defer iter.Close()
@@ -41,7 +36,7 @@ func (k Keeper) SendClaimTx(ctx sdk.Ctx, keeper Keeper, n client.Client, claimTx
 		}
 		// if the evidence length is less than minimum, it would not satisfy our merkle tree needs
 		if evidence.NumOfProofs < keeper.MinimumNumberOfProofs(sessionCtx) {
-			if err := pc.DeleteEvidence(evidence.SessionHeader, evidenceType); err != nil {
+			if err := pc.DeleteEvidence(evidence.SessionHeader, evidenceType, evidence.Address); err != nil {
 				ctx.Logger().Debug(err.Error())
 			}
 			continue
@@ -53,10 +48,15 @@ func (k Keeper) SendClaimTx(ctx sdk.Ctx, keeper Keeper, n client.Client, claimTx
 		// if the blockchain in the evidence is not supported then delete it because nodes don't get paid/challenged for unsupported blockchains
 		if !k.IsPocketSupportedBlockchain(sessionCtx.WithBlockHeight(evidence.SessionHeader.SessionBlockHeight), evidence.SessionHeader.Chain) {
 			ctx.Logger().Info(fmt.Sprintf("claim for %s blockchain isn't pocket supported, so will not send. Deleting evidence\n", evidence.SessionHeader.Chain))
-			if err := pc.DeleteEvidence(evidence.SessionHeader, evidenceType); err != nil {
+			if err := pc.DeleteEvidence(evidence.SessionHeader, evidenceType, evidence.Address); err != nil {
 				ctx.Logger().Debug(err.Error())
 			}
 			continue
+		}
+		kp, err := k.GetPKFromFile(ctx, evidence.Address)
+		if err != nil {
+			ctx.Logger().Error(fmt.Sprintf("an error occured retrieving the private key from file for the claim transaction:\n%s", err.Error()))
+			return
 		}
 		// check the current state to see if the unverified evidence has already been sent and processed (if so, then skip this evidence)
 		if _, found := k.GetClaim(ctx, sdk.Address(kp.PublicKey().Address()), evidence.SessionHeader, evidenceType); found {
@@ -64,7 +64,7 @@ func (k Keeper) SendClaimTx(ctx sdk.Ctx, keeper Keeper, n client.Client, claimTx
 		}
 		// if the claim is mature, delete it because we cannot submit a mature claim
 		if k.ClaimIsMature(ctx, evidence.SessionBlockHeight) {
-			if err := pc.DeleteEvidence(evidence.SessionHeader, evidenceType); err != nil {
+			if err := pc.DeleteEvidence(evidence.SessionHeader, evidenceType, evidence.Address); err != nil {
 				ctx.Logger().Debug(err.Error())
 			}
 			continue
@@ -141,7 +141,7 @@ func (k Keeper) ValidateClaim(ctx sdk.Ctx, claim pc.MsgClaim) (err sdk.Error) {
 		}
 	}
 	// validate the session
-	err = session.Validate(claim.FromAddress, app, sessionNodeCount)
+	_, err = session.Validate([]sdk.Address{claim.FromAddress}, app, sessionNodeCount)
 	if err != nil {
 		return err
 	}

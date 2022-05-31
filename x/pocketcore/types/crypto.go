@@ -16,7 +16,7 @@ var (
 	HashLength              = sha.SHA3_256.Size()
 	NetworkIdentifierLength = 4
 	AddrLength              = tmhash.TruncatedSize
-	globalPVKeyFile         = privval.FilePVKey{}
+	globalPVKeyFile         []privval.FilePVKeyLite
 )
 
 // "NetworkIdentifierVerification"- Verify the netID format (hex string)
@@ -67,13 +67,13 @@ func SignatureVerification(publicKey, msgHex, sigHex string) sdk.Error {
 }
 
 // "InitPVKeyFile" - Initializes the global private validator key variable
-func InitPVKeyFile(filePVKey privval.FilePVKey) {
+func InitPVKeyFile(filePVKey []privval.FilePVKeyLite) {
 	globalPVKeyFile = filePVKey
 }
 
 // "GetPVKeyFile" - Returns the globalPVKeyFile instance
-func GetPVKeyFile() (privval.FilePVKey, sdk.Error) {
-	if globalPVKeyFile.PrivKey == nil {
+func GetPVKeyFile() ([]privval.FilePVKeyLite, sdk.Error) {
+	if globalPVKeyFile == nil {
 		return globalPVKeyFile, NewInvalidPKError(ModuleName)
 	} else {
 		return globalPVKeyFile, nil

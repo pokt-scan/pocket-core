@@ -344,7 +344,7 @@ func InitKeyfiles() {
 			// generate random key for easy orchestration
 			randomKey := crypto.GenerateEd25519PrivKey()
 			privValKey(randomKey)
-			privValState()
+			privValState(1)
 			nodeKey(randomKey)
 			log2.Printf("No Validator Set! Creating Random Key: %s", randomKey.PublicKey().RawString())
 			return
@@ -421,12 +421,12 @@ func GetKeybase() (kb.Keybase, error) {
 	return keys, nil
 }
 
-func loadPKFromFile(path string) (privval.FilePVKey, string) {
+func loadPKFromFile(path string) ([]privval.FilePVKeyLite, string) {
 	keyJSONBytes, err := ioutil.ReadFile(path)
 	if err != nil {
 		cmn.Exit(err.Error())
 	}
-	pvKey := privval.FilePVKey{}
+	var pvKey []privval.FilePVKeyLite
 	err = cdc.UnmarshalJSON(keyJSONBytes, &pvKey)
 	if err != nil {
 		cmn.Exit(fmt.Sprintf("Error reading PrivValidator key from %v: %v\n", path, err))
@@ -435,13 +435,16 @@ func loadPKFromFile(path string) (privval.FilePVKey, string) {
 	return pvKey, path
 }
 
-func privValKey(res crypto.PrivateKey) {
-	privValKey := privval.FilePVKey{
-		Address: res.PubKey().Address(),
-		PubKey:  res.PubKey(),
-		PrivKey: res.PrivKey(),
+func privValKey(res ...crypto.PrivateKey) {
+	var pvKL []privval.FilePVKeyLite
+	for _, pk := range res {
+		pvKL = append(pvKL, privval.FilePVKeyLite{
+			Address: pk.PubKey().Address(),
+			PubKey:  pk.PubKey(),
+			PrivKey: pk.PrivKey(),
+		})
 	}
-	pvkBz, err := cdc.MarshalJSONIndent(privValKey, "", "  ")
+	pvkBz, err := cdc.MarshalJSONIndent(pvKL, "", "  ")
 	if err != nil {
 		log2.Fatal(err)
 	}
@@ -453,7 +456,7 @@ func privValKey(res crypto.PrivateKey) {
 	if err != nil {
 		log2.Fatal(err)
 	}
-	types.InitPVKeyFile(privValKey)
+	types.InitPVKeyFile(pvKL)
 }
 
 func nodeKey(res crypto.PrivateKey) {
@@ -474,8 +477,8 @@ func nodeKey(res crypto.PrivateKey) {
 	}
 }
 
-func privValState() {
-	pvkBz, err := cdc.MarshalJSONIndent(privval.FilePVLastSignState{}, "", "  ")
+func privValState(size int) {
+	pvkBz, err := cdc.MarshalJSONIndent(make([]privval.FilePVLastSignStateLite, size), "", "  ")
 	if err != nil {
 		log2.Fatal(err)
 	}
@@ -771,11 +774,18 @@ func SetValidator(address sdk.Address, passphrase string) {
 		log2.Fatal(err)
 	}
 	privValKey(res)
-	privValState()
+	privValState(1)
 	nodeKey(res)
 }
 
-func GetPrivValFile() (file privval.FilePVKey) {
+func SetValidators(keys []crypto.PrivateKey) {
+	resetFilePV(GlobalConfig.PocketConfig.DataDir+FS+GlobalConfig.TendermintConfig.PrivValidatorKey, GlobalConfig.PocketConfig.DataDir+FS+GlobalConfig.TendermintConfig.PrivValidatorState, log.NewNopLogger())
+	privValKey(keys...)
+	privValState(len(keys))
+	nodeKey(keys[0])
+}
+
+func GetPrivValFile() (file []privval.FilePVKeyLite) {
 	file, _ = loadPKFromFile(GlobalConfig.PocketConfig.DataDir + FS + GlobalConfig.TendermintConfig.PrivValidatorKey)
 	return
 }

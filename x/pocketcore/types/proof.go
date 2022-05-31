@@ -19,7 +19,7 @@ type Proof interface {
 	GetSigner() sdk.Address                                                                              // returns the main signer(s) for the proof (used in messages)
 	SessionHeader() SessionHeader                                                                        // returns the session header
 	Validate(appSupportedBlockchains []string, sessionNodeCount int, sessionBlockHeight int64) sdk.Error // validate the object
-	Store(max sdk.BigInt)                                                                                // handle the proof after validation
+	Store(max sdk.BigInt, address sdk.Address)                                                           // handle the proof after validation
 	ToProto() ProofI                                                                                     // convert to protobuf
 }
 
@@ -56,7 +56,7 @@ func (ps ProofIs) FromProofI() (res Proofs) {
 var _ Proof = RelayProof{} // ensure implements interface at compile time
 
 // "ValidateLocal" - Validates the proof object, where the owner of the proof is the local node
-func (rp RelayProof) ValidateLocal(appSupportedBlockchains []string, sessionNodeCount int, sessionBlockHeight int64, verifyAddr sdk.Address) sdk.Error {
+func (rp RelayProof) ValidateLocal(appSupportedBlockchains []string, sessionNodeCount int, sessionBlockHeight int64, verifyAddrs []sdk.Address) sdk.Error {
 	//Basic Validations
 	err := rp.ValidateBasic()
 	if err != nil {
@@ -67,7 +67,14 @@ func (rp RelayProof) ValidateLocal(appSupportedBlockchains []string, sessionNode
 		return NewInvalidNodePubKeyError(ModuleName)
 	}
 	// validate the public key correctness
-	if !sdk.Address(servicerPublicKey.Address()).Equals(verifyAddr) {
+	found := false
+	for _, verifyAddr := range verifyAddrs {
+		if sdk.Address(servicerPublicKey.Address()).Equals(verifyAddr) {
+			found = true
+			break
+		}
+	}
+	if !found {
 		return NewInvalidNodePubKeyError(ModuleName) // the public key is not this nodes, so they would not get paid
 	}
 	err = rp.Validate(appSupportedBlockchains, sessionNodeCount, sessionBlockHeight)
@@ -211,9 +218,9 @@ func (rp RelayProof) HashStringWithSignature() string {
 }
 
 // "Store" - Handles the relay proof object by adding it to the cache
-func (rp RelayProof) Store(maxRelays sdk.BigInt) {
+func (rp RelayProof) Store(maxRelays sdk.BigInt, address sdk.Address) {
 	// add the Proof to the global (in memory) collection of proofs
-	SetProof(rp.SessionHeader(), RelayEvidence, rp, maxRelays)
+	SetProof(rp.SessionHeader(), RelayEvidence, rp, maxRelays, address)
 }
 
 func (rp RelayProof) GetSigner() sdk.Address {
@@ -236,16 +243,24 @@ func (rp RelayProof) GetSigner() sdk.Address {
 var _ Proof = ChallengeProofInvalidData{} // compile time interface implementation
 
 // "ValidateLocal" - Validate local is used to validate a challenge request directly from a client
-func (c ChallengeProofInvalidData) ValidateLocal(h SessionHeader, maxRelays sdk.BigInt, supportedBlockchains []string, sessionNodeCount int, sessionNodes SessionNodes, selfAddr sdk.Address) sdk.Error {
+func (c ChallengeProofInvalidData) ValidateLocal(h SessionHeader, maxRelays sdk.BigInt, supportedBlockchains []string, sessionNodeCount int, sessionNodes SessionNodes, selfAddr []sdk.Address) sdk.Error {
 	// check if verifyPubKey in session (must be in session to do challenges)
-	if !sessionNodes.Contains(selfAddr) {
+	address, found := sdk.Address{}, false
+	for _, addr := range selfAddr {
+		if sessionNodes.Contains(addr) {
+			address = addr
+			found = true
+			break
+		}
+	}
+	if !found {
 		return NewNodeNotInSessionError(ModuleName)
 	}
 	sessionblockHeight := h.SessionBlockHeight
 	// calculate the maximum possible challenges
 	maxPossibleChallenges := maxRelays.ToDec().Quo(sdk.NewDec(int64(len(supportedBlockchains)))).Quo(sdk.NewDec(int64(sessionNodeCount))).RoundInt()
 	// check for overflow on # of proofs
-	evidence, er := GetEvidence(h, ChallengeEvidence, maxPossibleChallenges)
+	evidence, er := GetEvidence(h, ChallengeEvidence, maxPossibleChallenges, address)
 	if er != nil {
 		return sdk.ErrInternal(er.Error())
 	}
@@ -448,9 +463,9 @@ func (c ChallengeProofInvalidData) GetSigner() sdk.Address {
 }
 
 // "Store" - Stores the challenge proof (stores in cache)
-func (c ChallengeProofInvalidData) Store(maxChallenges sdk.BigInt) {
+func (c ChallengeProofInvalidData) Store(maxChallenges sdk.BigInt, address sdk.Address) {
 	// add the Proof to the global (in memory) collection of proofs
-	SetProof(c.SessionHeader(), ChallengeEvidence, c, maxChallenges)
+	SetProof(c.SessionHeader(), ChallengeEvidence, c, maxChallenges, address)
 }
 
 func (c ChallengeProofInvalidData) ToProto() ProofI {

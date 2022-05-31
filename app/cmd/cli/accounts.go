@@ -24,6 +24,7 @@ func init() {
 	accountsCmd.AddCommand(createCmd)
 	accountsCmd.AddCommand(getValidator)
 	accountsCmd.AddCommand(setValidator)
+	accountsCmd.AddCommand(setValidators)
 	accountsCmd.AddCommand(deleteCmd)
 	accountsCmd.AddCommand(listCmd)
 	accountsCmd.AddCommand(showCmd)
@@ -116,7 +117,9 @@ var getValidator = &cobra.Command{
 			return
 		}
 		val := app.GetPrivValFile()
-		fmt.Printf("Validator Address:%s\n", strings.ToLower(val.Address.String()))
+		for _, v := range val {
+			fmt.Printf("Validator Address:%s\n", strings.ToLower(v.Address.String()))
+		}
 	},
 }
 
@@ -134,6 +137,41 @@ var setValidator = &cobra.Command{
 		}
 		fmt.Println("Enter the password:")
 		app.SetValidator(addr, app.Credentials(pwd))
+	},
+}
+
+var setValidators = &cobra.Command{
+	Use:   `set-validators <path to keyfile>`,
+	Short: "Sets the main validator accounts for tendermint; NOTE: keyfile should be a json string array of private keys",
+	Long:  `Sets the main validator accounts that will be used across all Tendermint functions; NOTE: keyfile should be a json string array of private keys`,
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		app.InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL)
+		var arr []string
+		data, err := os.ReadFile(args[0])
+		if err != nil {
+			fmt.Println(fmt.Errorf("an error occurred attempting to read the key file: %s", err.Error()))
+			os.Exit(1)
+		}
+		if err := json.Unmarshal(data, &arr); err != nil {
+			fmt.Println("an error occurred unmarshalling the addresses into json format. Please make sure the input for this is a proper json array.")
+			os.Exit(1)
+		}
+		var pks []crypto.PrivateKey
+		for _, pk := range arr {
+			bz, err := hex.DecodeString(pk)
+			if err != nil {
+				fmt.Println("an error occurred hex decoding this private key: ", pk, err.Error())
+				os.Exit(1)
+			}
+			a, err := crypto.NewPrivateKeyBz(bz)
+			if err != nil {
+				fmt.Printf("an error occurred creating a private key from hex input: %s, %s", pk, err)
+				os.Exit(1)
+			}
+			pks = append(pks, a)
+		}
+		app.SetValidators(pks)
 	},
 }
 
