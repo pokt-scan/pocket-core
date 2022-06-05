@@ -81,7 +81,7 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 // "HandleChallenge" - Handles a client relay response challenge request
 func (k Keeper) HandleChallenge(ctx sdk.Ctx, challenge pc.ChallengeProofInvalidData) (*pc.ChallengeResponse, sdk.Error) {
 	// get self node (your validator) from the current state
-	selfNode := k.GetSelfAddress(ctx)
+	selfAddress := k.GetSelfAddress(ctx)
 	sessionBlkHeight := k.GetLatestSessionBlockHeight(ctx)
 	// get the session context
 	sessionCtx, er := ctx.PrevCtx(sessionBlkHeight)
@@ -116,12 +116,12 @@ func (k Keeper) HandleChallenge(ctx sdk.Ctx, challenge pc.ChallengeProofInvalidD
 		pc.SetSession(session)
 	}
 	// validate the challenge
-	err := challenge.ValidateLocal(header, app.GetMaxRelays(), app.GetChains(), int(k.SessionNodeCount(sessionCtx)), session.SessionNodes, selfNode)
+	err, selfNode := challenge.ValidateLocal(header, app.GetMaxRelays(), app.GetChains(), int(k.SessionNodeCount(sessionCtx)), session.SessionNodes, selfAddress)
 	if err != nil {
 		return nil, err
 	}
 	// store the challenge in memory
-	challenge.Store(app.GetMaxRelays(), selfNode[0])
+	challenge.Store(app.GetMaxRelays(), selfNode)
 	// update metric
 	pc.GlobalServiceMetric().AddChallengeFor(header.Chain)
 	return &pc.ChallengeResponse{Response: fmt.Sprintf("successfully stored challenge proof for %s", challenge.MinorityResponse.Proof.ServicerPubKey)}, nil

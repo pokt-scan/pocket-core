@@ -54,12 +54,14 @@ message ProofI {
 
 message ProtoEvidence {
 	option (gogoproto.goproto_getters) = false;
-	bytes reporterAddress = 1 [(gogoproto.jsontag) = "address", (gogoproto.casttype) = "github.com/pokt-network/pocket-core/types.Address"];
-	bytes bloomBytes = 2 [(gogoproto.jsontag) = "bloom_bytes"];
-	SessionHeader sessionHeader = 3 [(gogoproto.jsontag) = "evidence_header"];
-	int64 numOfProofs = 4 [(gogoproto.jsontag) = "num_of_proofs"];
-	repeated ProofI proofs = 5 [(gogoproto.jsontag) = "proofs", (gogoproto.castrepeated) = "ProofIs", (gogoproto.nullable) = false];
-	int32 evidenceType = 6 [(gogoproto.jsontag) = "evidence_type", (gogoproto.casttype) = "EvidenceType"];
+
+	bytes bloomBytes = 1 [(gogoproto.jsontag) = "bloom_bytes"];
+	SessionHeader sessionHeader = 2 [(gogoproto.jsontag) = "evidence_header"];
+	int64 numOfProofs = 3 [(gogoproto.jsontag) = "num_of_proofs"];
+	repeated ProofI proofs = 4 [(gogoproto.jsontag) = "proofs", (gogoproto.castrepeated) = "ProofIs", (gogoproto.nullable) = false];
+	int32 evidenceType = 5 [(gogoproto.jsontag) = "evidence_type", (gogoproto.casttype) = "EvidenceType"];
+	bytes reporterAddress = 6 [(gogoproto.jsontag) = "address", (gogoproto.casttype) = "github.com/pokt-network/pocket-core/types.Address"];
+
 }
 
 message RelayProof {

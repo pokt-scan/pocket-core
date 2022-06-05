@@ -174,12 +174,12 @@ func (e *Evidence) ToProto() (*ProtoEvidence, error) {
 		return nil, err
 	}
 	return &ProtoEvidence{
-		Address:       e.Address,
-		BloomBytes:    encodedBloom,
-		SessionHeader: &e.SessionHeader,
-		NumOfProofs:   e.NumOfProofs,
-		Proofs:        e.Proofs.ToProofI(),
-		EvidenceType:  e.EvidenceType,
+		ReporterAddress: e.Address,
+		BloomBytes:      encodedBloom,
+		SessionHeader:   &e.SessionHeader,
+		NumOfProofs:     e.NumOfProofs,
+		Proofs:          e.Proofs.ToProofI(),
+		EvidenceType:    e.EvidenceType,
 	}, nil
 }
 
@@ -190,7 +190,7 @@ func (pe *ProtoEvidence) FromProto() (Evidence, error) {
 		return Evidence{}, fmt.Errorf("could not unmarshal into ProtoEvidence from cache, bloom bytes gob decode: %s", err.Error())
 	}
 	return Evidence{
-		Address:       pe.Address,
+		Address:       pe.ReporterAddress,
 		Bloom:         bloomFilter,
 		SessionHeader: *pe.SessionHeader,
 		NumOfProofs:   pe.NumOfProofs,

@@ -1050,7 +1050,7 @@ func TestClaimAminoTx(t *testing.T) {
 					ApplicationPubKey:  appPrivateKey.PublicKey().RawString(),
 					Chain:              sdk.PlaceholderHash,
 					SessionBlockHeight: 1,
-				}, pocketTypes.RelayEvidence, proof, sdk.NewInt(1000000))
+				}, pocketTypes.RelayEvidence, proof, sdk.NewInt(1000000), validators[0].Address)
 				assert.Nil(t, err)
 			}
 			_, _, evtChan := subscribeTo(t, tmTypes.EventTx)
@@ -1125,7 +1125,7 @@ func TestClaimProtoTx(t *testing.T) {
 					ApplicationPubKey:  appPrivateKey.PublicKey().RawString(),
 					Chain:              sdk.PlaceholderHash,
 					SessionBlockHeight: 1,
-				}, pocketTypes.RelayEvidence, proof, sdk.NewInt(1000000))
+				}, pocketTypes.RelayEvidence, proof, sdk.NewInt(1000000), validators[0].Address)
 				assert.Nil(t, err)
 			}
 			_, _, evtChan := subscribeTo(t, tmTypes.EventTx)
@@ -1160,10 +1160,12 @@ func TestAminoClaimTxChallenge(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			genBz, keys, _, _ := fiveValidatorsOneAppGenesis()
+			servicerPrivKey3 := keys[3]
+			addr := servicerPrivKey3.PublicKey().Address()
 			challenges := NewValidChallengeProof(t, keys, 5)
 			_, _, cleanup := tc.memoryNodeFn(t, genBz)
 			for _, c := range challenges {
-				c.Store(sdk.NewInt(1000000))
+				c.Store(sdk.NewInt(1000000), sdk.Address(addr))
 			}
 			_, _, evtChan := subscribeTo(t, tmTypes.EventTx)
 			res := <-evtChan // Wait for tx
@@ -1197,10 +1199,12 @@ func TestProtoClaimTxChallenge(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			genBz, keys, _, _ := fiveValidatorsOneAppGenesis()
+			servicerPrivKey3 := keys[3]
+			addr := servicerPrivKey3.PublicKey().Address()
 			challenges := NewValidChallengeProof(t, keys, 5)
 			_, _, cleanup := tc.memoryNodeFn(t, genBz)
 			for _, c := range challenges {
-				c.Store(sdk.NewInt(1000000))
+				c.Store(sdk.NewInt(1000000), sdk.Address(addr))
 			}
 			_, _, evtChan := subscribeTo(t, tmTypes.EventTx)
 			res := <-evtChan // Wait for tx

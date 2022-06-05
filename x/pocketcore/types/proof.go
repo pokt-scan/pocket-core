@@ -243,7 +243,7 @@ func (rp RelayProof) GetSigner() sdk.Address {
 var _ Proof = ChallengeProofInvalidData{} // compile time interface implementation
 
 // "ValidateLocal" - Validate local is used to validate a challenge request directly from a client
-func (c ChallengeProofInvalidData) ValidateLocal(h SessionHeader, maxRelays sdk.BigInt, supportedBlockchains []string, sessionNodeCount int, sessionNodes SessionNodes, selfAddr []sdk.Address) sdk.Error {
+func (c ChallengeProofInvalidData) ValidateLocal(h SessionHeader, maxRelays sdk.BigInt, supportedBlockchains []string, sessionNodeCount int, sessionNodes SessionNodes, selfAddr []sdk.Address) (sdk.Error, sdk.Address) {
 	// check if verifyPubKey in session (must be in session to do challenges)
 	address, found := sdk.Address{}, false
 	for _, addr := range selfAddr {
@@ -254,7 +254,7 @@ func (c ChallengeProofInvalidData) ValidateLocal(h SessionHeader, maxRelays sdk.
 		}
 	}
 	if !found {
-		return NewNodeNotInSessionError(ModuleName)
+		return NewNodeNotInSessionError(ModuleName), nil
 	}
 	sessionblockHeight := h.SessionBlockHeight
 	// calculate the maximum possible challenges
@@ -262,16 +262,16 @@ func (c ChallengeProofInvalidData) ValidateLocal(h SessionHeader, maxRelays sdk.
 	// check for overflow on # of proofs
 	evidence, er := GetEvidence(h, ChallengeEvidence, maxPossibleChallenges, address)
 	if er != nil {
-		return sdk.ErrInternal(er.Error())
+		return sdk.ErrInternal(er.Error()), address
 	}
 	if evidence.NumOfProofs >= maxPossibleChallenges.Int64() {
-		return NewOverServiceError(ModuleName)
+		return NewOverServiceError(ModuleName), address
 	}
 	err := c.Validate(supportedBlockchains, sessionNodeCount, sessionblockHeight)
 	if err != nil {
-		return err
+		return err, address
 	}
-	return nil
+	return nil, address
 }
 
 // "Validate" - validate is used to validate a challenge request
