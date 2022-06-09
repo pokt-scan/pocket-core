@@ -113,7 +113,6 @@ workflows:
               only:
                 - /^RC-.*/
                 - /^BETA-.*/
-                - /^stable-.*/
             branches:
               ignore: /.*/
       - test:
@@ -124,7 +123,6 @@ workflows:
               only:
                 - /^RC-.*/
                 - /^BETA-.*/
-                - /^stable-.*/
             branches:
               ignore: /.*/
       - trigger-pocket-core-deployments-tags:
@@ -135,6 +133,5 @@ workflows:
               only:
                 - /^RC-.*/
                 - /^BETA-.*/
-                - /^stable-.*/
             branches:
               ignore: /.*/
