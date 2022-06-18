@@ -13,7 +13,7 @@ import (
 )
 
 // "SendClaimTx" - Automatically sends a claim of work/challenge based on relays or challenges stored.
-func (k Keeper) SendClaimTx(ctx sdk.Ctx, keeper Keeper, n client.Client, claimTx func(pk crypto.PrivateKey, cliCtx util.CLIContext, txBuilder auth.TxBuilder, header pc.SessionHeader, totalProofs int64, root pc.HashRange, evidenceType pc.EvidenceType) (*sdk.TxResponse, error)) {
+func (k Keeper) SendClaimTx(ctx sdk.Ctx, keeper Keeper, n client.Client, claimTx func(pk crypto.PrivateKey, cliCtx util.CLIContext, txBuilder auth.TxBuilder, header pc.SessionHeader, totalProofs int64, root pc.HashRange, evidenceType pc.EvidenceType) (*sdk.TxResponse, error), addr sdk.Address) {
 	// get the private val key (main) account from the keybase
 	// retrieve the iterator to go through each piece of evidence in storage
 	iter := pc.EvidenceIterator()
@@ -21,6 +21,9 @@ func (k Keeper) SendClaimTx(ctx sdk.Ctx, keeper Keeper, n client.Client, claimTx
 	// loop through each evidence
 	for ; iter.Valid(); iter.Next() {
 		evidence := iter.Value()
+		if !evidence.Address.Equals(addr) {
+			continue
+		}
 		// if the number of proofs in the evidence object is zero
 		if evidence.NumOfProofs == 0 {
 			ctx.Logger().Error("evidence of length zero was found in evidence storage")

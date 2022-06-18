@@ -115,7 +115,7 @@ func (am AppModule) EndBlock(ctx sdk.Ctx, _ abci.RequestEndBlock) []abci.Validat
 					} else {
 						if !s.SyncInfo.CatchingUp {
 							// auto send the proofs
-							am.keeper.SendClaimTx(ctx, am.keeper, am.keeper.TmNode, ClaimTx)
+							am.keeper.SendClaimTx(ctx, am.keeper, am.keeper.TmNode, ClaimTx, addr)
 							// auto claim the proofs
 							am.keeper.SendProofTx(ctx, am.keeper.TmNode, ProofTx, addr)
 						}
