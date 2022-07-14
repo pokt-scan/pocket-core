@@ -20,6 +20,10 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 	selfAddr := sdk.Address(pk.PublicKey().Address())
 	// retrieve the nonNative blockchains your node is hosting
 	hostedBlockchains := k.GetHostedBlockchains()
+	// if the payload method is empty, set it to the default
+	if relay.Payload.Method == "" {
+		relay.Payload.Method = "POST"
+	}
 	// attempt to execute
 	respPayload, err := relay.Execute(hostedBlockchains)
 	if err != nil {
