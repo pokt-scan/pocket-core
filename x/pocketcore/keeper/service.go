@@ -12,8 +12,6 @@ import (
 // "HandleRelay" - Handles an api (read/write) request to a non-native (external) blockchain
 func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk.Error) {
 	relayTimeStart := time.Now()
-	// get the latest session block height because this relay will correspond with the latest session
-	sessionBlockHeight := k.GetLatestSessionBlockHeight(ctx)
 	// get self node (your validator) from the current state
 	pk, err := k.GetSelfPrivKey(ctx)
 	if err != nil {
@@ -22,32 +20,6 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay) (*pc.RelayResponse, sdk
 	selfAddr := sdk.Address(pk.PublicKey().Address())
 	// retrieve the nonNative blockchains your node is hosting
 	hostedBlockchains := k.GetHostedBlockchains()
-	// ensure the validity of the relay
-	maxPossibleRelays, err := relay.Validate(ctx, k.posKeeper, k.appKeeper, k, selfAddr, hostedBlockchains, sessionBlockHeight)
-	if err != nil {
-		if pc.GlobalPocketConfig.RelayErrors {
-			ctx.Logger().Error(
-				fmt.Sprintf("could not validate relay for app: %s for chainID: %v with error: %s",
-					relay.Proof.ServicerPubKey,
-					relay.Proof.Blockchain,
-					err.Error(),
-				),
-			)
-			ctx.Logger().Debug(
-				fmt.Sprintf(
-					"could not validate relay for app: %s, for chainID %v on node %s, at session height: %v, with error: %s",
-					relay.Proof.ServicerPubKey,
-					relay.Proof.Blockchain,
-					selfAddr.String(),
-					sessionBlockHeight,
-					err.Error(),
-				),
-			)
-		}
-		return nil, err
-	}
-	// store the proof before execution, because the proof corresponds to the previous relay
-	relay.Proof.Store(maxPossibleRelays)
 	// attempt to execute
 	respPayload, err := relay.Execute(hostedBlockchains)
 	if err != nil {
