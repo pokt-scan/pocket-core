@@ -118,18 +118,22 @@ func (app PocketCoreApp) QueryAllBlockTxs(height int64, page, perPage int) (res 
 }
 
 func (app PocketCoreApp) QueryUnconfirmedTxs(page, perPage int) (res *core_types.ResultUnconfirmedTxs, err error) {
-	res = &core_types.ResultUnconfirmedTxs{}
+	res = &core_types.ResultUnconfirmedTxs{
+		Count: 0,
+		Total: 0,
+		Txs:   make([]tmtypes.Tx, 0),
+	}
 	tmClient := app.GetClient()
 	defer func() { _ = tmClient.Stop() }()
 	page, perPage = checkPagination(page, perPage)
 
-	unconfirmedTxsResult, err := tmClient.UnconfirmedTxs(GlobalConfig.TendermintConfig.Mempool.Size)
+	unconfirmedTxsResult, err := tmClient.UnconfirmedTxs(app.BaseApp.TMNode().Mempool().Size())
 	if err != nil {
 		return nil, err
 	}
 
 	skip := (page - 1) * perPage
-	res.Total = unconfirmedTxsResult.Total // this
+	res.Total = unconfirmedTxsResult.Total
 
 	for i, t := range unconfirmedTxsResult.Txs {
 		if i < skip {
@@ -140,14 +144,18 @@ func (app PocketCoreApp) QueryUnconfirmedTxs(page, perPage int) (res *core_types
 			break
 		}
 	}
+
+	res.Count = len(res.Txs)
 	return
 }
 
-func (app PocketCoreApp) QueryUnconfirmedTx(hash string) (res []byte, err error) {
+func (app PocketCoreApp) QueryUnconfirmedTx(hash string) (res tmtypes.Tx, err error) {
 	tmClient := app.GetClient()
 	defer func() { _ = tmClient.Stop() }()
 
-	unconfirmedTxsResult, err := tmClient.UnconfirmedTxs(GlobalConfig.TendermintConfig.Mempool.Size)
+	hash = strings.ToLower(hash)
+
+	unconfirmedTxsResult, err := tmClient.UnconfirmedTxs(app.BaseApp.TMNode().Mempool().Size())
 	if err != nil {
 		return nil, err
 	}

@@ -241,7 +241,7 @@ func ResultTxToRPC(res *core_types.ResultTx) *RPCResultTx {
 	return r
 }
 
-func ResultUnconfirmedTxToRPC(res types.Tx) *RPCResultUnconfirmedTx {
+func ResultUnconfirmedTxToRPC(res types.Tx, height int64) *RPCResultUnconfirmedTx {
 	if res == nil {
 		return nil
 	}
@@ -250,7 +250,7 @@ func ResultUnconfirmedTxToRPC(res types.Tx) *RPCResultUnconfirmedTx {
 		Hash: res.Hash(),
 	}
 
-	stdTx, err := app.UnmarshalTx(res, -1)
+	stdTx, err := app.UnmarshalTx(res, height)
 
 	if err != nil {
 		fmt.Println("an error occurred unmarshalling the transaction", err.Error())
@@ -262,7 +262,7 @@ func ResultUnconfirmedTxToRPC(res types.Tx) *RPCResultUnconfirmedTx {
 	return r
 }
 
-func ResultUnconfirmedTxsToRPC(res *core_types.ResultUnconfirmedTxs) RPCResultUnconfirmedTxSearch {
+func ResultUnconfirmedTxsToRPC(res *core_types.ResultUnconfirmedTxs, height int64) RPCResultUnconfirmedTxSearch {
 	if res == nil {
 		return RPCResultUnconfirmedTxSearch{}
 	}
@@ -273,7 +273,7 @@ func ResultUnconfirmedTxsToRPC(res *core_types.ResultUnconfirmedTxs) RPCResultUn
 		TotalTxs:  res.Total,
 	}
 	for _, result := range res.Txs {
-		rpcUnconfirmedTxSearch.Txs = append(rpcUnconfirmedTxSearch.Txs, ResultUnconfirmedTxToRPC(result))
+		rpcUnconfirmedTxSearch.Txs = append(rpcUnconfirmedTxSearch.Txs, ResultUnconfirmedTxToRPC(result, height))
 	}
 	return rpcUnconfirmedTxSearch
 }
@@ -355,11 +355,16 @@ func UnconfirmedTxs(w http.ResponseWriter, r *http.Request, ps httprouter.Params
 		return
 	}
 
+	height, err := app.PCA.QueryHeight()
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+	}
+
 	res, err := app.PCA.QueryUnconfirmedTxs(params.Page, params.PerPage)
 	if err != nil {
 		WriteErrorResponse(w, 400, err.Error())
 	}
-	rpcResponse := ResultUnconfirmedTxsToRPC(res)
+	rpcResponse := ResultUnconfirmedTxsToRPC(res, height)
 	s, er := json.MarshalIndent(rpcResponse, "", "  ")
 	if er != nil {
 		WriteErrorResponse(w, 400, er.Error())
@@ -375,11 +380,17 @@ func UnconfirmedTx(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
 		return
 	}
 
+	height, err := app.PCA.QueryHeight()
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+	}
+
 	res, err := app.PCA.QueryUnconfirmedTx(params.Hash)
 	if err != nil {
 		WriteErrorResponse(w, 400, err.Error())
 	}
-	rpcResponse := ResultUnconfirmedTxToRPC(res)
+
+	rpcResponse := ResultUnconfirmedTxToRPC(res, height)
 	s, er := json.MarshalIndent(rpcResponse, "", "  ")
 	if er != nil {
 		WriteErrorResponse(w, 400, er.Error())
