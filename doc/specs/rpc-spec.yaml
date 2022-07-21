@@ -652,7 +652,7 @@ paths:
                 $ref: '#/components/schemas/QueryBlockTXsResponse'
         '400':
           description: Failed to retrieve the transaction information
-  /query/unconfirmedtxs:
+  /query/c:
     post:
       tags:
         - query
