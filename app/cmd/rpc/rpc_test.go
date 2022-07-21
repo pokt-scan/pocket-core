@@ -5,6 +5,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/pokt-network/pocket-core/app"
+	"github.com/pokt-network/pocket-core/codec"
+	"github.com/pokt-network/pocket-core/crypto"
+	rand2 "github.com/tendermint/tendermint/libs/rand"
+	"github.com/tendermint/tendermint/rpc/client"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -15,12 +20,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/pokt-network/pocket-core/app"
-	"github.com/pokt-network/pocket-core/codec"
-	"github.com/pokt-network/pocket-core/crypto"
-	rand2 "github.com/tendermint/tendermint/libs/rand"
-	"github.com/tendermint/tendermint/rpc/client"
 
 	types3 "github.com/pokt-network/pocket-core/x/apps/types"
 
