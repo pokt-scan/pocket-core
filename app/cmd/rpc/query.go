@@ -143,6 +143,19 @@ type RPCResponseDeliverTx struct {
 	MessageType string        `json:"message_type"`
 }
 
+// Result of search unconfirmed txs
+type RPCResultUnconfirmedTxSearch struct {
+	Txs       []*RPCResultUnconfirmedTx `json:"txs"`
+	PageCount int                       `json:"page_count"`
+	TotalTxs  int                       `json:"total_txs"`
+}
+
+// Result of querying for a tx
+type RPCResultUnconfirmedTx struct {
+	Hash  bytes.HexBytes `json:"hash"`
+	StdTx RPCStdTx       `json:"stdTx,omitempty"`
+}
+
 type RPCStdTx types2.StdTx
 
 type rPCStdTx struct {
@@ -228,6 +241,43 @@ func ResultTxToRPC(res *core_types.ResultTx) *RPCResultTx {
 	return r
 }
 
+func ResultUnconfirmedTxToRPC(res types.Tx) *RPCResultUnconfirmedTx {
+	if res == nil {
+		return nil
+	}
+
+	r := &RPCResultUnconfirmedTx{
+		Hash: res.Hash(),
+	}
+
+	stdTx, err := app.UnmarshalTx(res, -1)
+
+	if err != nil {
+		fmt.Println("an error occurred unmarshalling the transaction", err.Error())
+		return r
+	}
+
+	r.StdTx = RPCStdTx(stdTx)
+
+	return r
+}
+
+func ResultUnconfirmedTxsToRPC(res *core_types.ResultUnconfirmedTxs) RPCResultUnconfirmedTxSearch {
+	if res == nil {
+		return RPCResultUnconfirmedTxSearch{}
+	}
+	pageCount := len(res.Txs)
+	rpcUnconfirmedTxSearch := RPCResultUnconfirmedTxSearch{
+		Txs:       make([]*RPCResultUnconfirmedTx, 0, res.Total),
+		PageCount: pageCount,
+		TotalTxs:  res.Total,
+	}
+	for _, result := range res.Txs {
+		rpcUnconfirmedTxSearch.Txs = append(rpcUnconfirmedTxSearch.Txs, ResultUnconfirmedTxToRPC(result))
+	}
+	return rpcUnconfirmedTxSearch
+}
+
 func AccountTxs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	var params = PaginateAddrParams{}
 	if err := PopModel(w, r, ps, &params); err != nil {
@@ -290,6 +340,46 @@ func AllBlockTxs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		WriteErrorResponse(w, 400, err.Error())
 	}
 	rpcResponse := ResultTxSearchToRPC(res)
+	s, er := json.MarshalIndent(rpcResponse, "", "  ")
+	if er != nil {
+		WriteErrorResponse(w, 400, er.Error())
+		return
+	}
+	WriteJSONResponse(w, string(s), r.URL.Path, r.Host)
+}
+
+func UnconfirmedTxs(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var params = PaginatedHeightParams{}
+	if err := PopModel(w, r, ps, &params); err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+		return
+	}
+
+	res, err := app.PCA.QueryUnconfirmedTxs(params.Page, params.PerPage)
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+	}
+	rpcResponse := ResultUnconfirmedTxsToRPC(res)
+	s, er := json.MarshalIndent(rpcResponse, "", "  ")
+	if er != nil {
+		WriteErrorResponse(w, 400, er.Error())
+		return
+	}
+	WriteJSONResponse(w, string(s), r.URL.Path, r.Host)
+}
+
+func UnconfirmedTx(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	var params = HashAndProveParams{}
+	if err := PopModel(w, r, ps, &params); err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+		return
+	}
+
+	res, err := app.PCA.QueryUnconfirmedTx(params.Hash)
+	if err != nil {
+		WriteErrorResponse(w, 400, err.Error())
+	}
+	rpcResponse := ResultUnconfirmedTxToRPC(res)
 	s, er := json.MarshalIndent(rpcResponse, "", "  ")
 	if er != nil {
 		WriteErrorResponse(w, 400, er.Error())
