@@ -2429,6 +2429,7 @@ components:
       properties:
         transaction:
           $ref: '#/components/schemas/Transaction'
+<<<<<<< HEAD
     QueryPaginatedHeightParams:
       type: object
       properties:
@@ -2441,6 +2442,8 @@ components:
         per_page:
           type: integer
           format: int64
+=======
+>>>>>>> 827b76bc (Added RPC Spec about unconfirmedtxs and unconfirmedtx endpoints.)
     QueryUnconfirmedTX:
       type: object
       properties:
