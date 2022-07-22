@@ -167,7 +167,7 @@ func TestRPC_QueryUnconfirmedTx(t *testing.T) {
 	var params = HashAndProveParams{
 		Hash: tx.TxHash,
 	}
-	q := newQueryRequest("unconfirmed_tx", newBody(params))
+	q := newQueryRequest("unconfirmedtx", newBody(params))
 	rec := httptest.NewRecorder()
 	UnconfirmedTx(rec, q, httprouter.Params{})
 	resp := getJSONResponse(rec)
@@ -252,7 +252,7 @@ func TestRPC_QueryUnconfirmedTxs(t *testing.T) {
 		Page:    1,
 		PerPage: 1,
 	}
-	q := newQueryRequest("unconfirmed_txs", newBody(params))
+	q := newQueryRequest("unconfirmedtxs", newBody(params))
 	rec := httptest.NewRecorder()
 	UnconfirmedTxs(rec, q, httprouter.Params{})
 	resp := getJSONResponse(rec)
