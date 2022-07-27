@@ -2052,6 +2052,9 @@ components:
         hash:
           type: string
           description: Hash of the transaction
+        message_type:
+          type: string
+          description: Transaction type like the one provide on Transaction tx_result.message_type
         stdTx:
           $ref: '#/components/schemas/StdTx'
     QueryAddressHeight:

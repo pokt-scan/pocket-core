@@ -152,8 +152,9 @@ type RPCResultUnconfirmedTxSearch struct {
 
 // Result of querying for a tx
 type RPCResultUnconfirmedTx struct {
-	Hash  bytes.HexBytes `json:"hash"`
-	StdTx RPCStdTx       `json:"stdTx,omitempty"`
+	Hash        bytes.HexBytes `json:"hash"`
+	MessageType string         `json:"message_type"`
+	StdTx       RPCStdTx       `json:"stdTx,omitempty"`
 }
 
 type RPCStdTx types2.StdTx
@@ -251,6 +252,8 @@ func ResultUnconfirmedTxToRPC(res types.Tx, height int64) *RPCResultUnconfirmedT
 	}
 
 	stdTx, err := app.UnmarshalTx(res, height)
+
+	r.MessageType = stdTx.Msg.Type()
 
 	if err != nil {
 		fmt.Println("an error occurred unmarshalling the transaction", err.Error())
