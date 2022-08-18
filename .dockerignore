@@ -1,0 +1,8 @@
+.circleci
+.github
+*.md
+.env
+.idea
+.git
+.gitbook.yaml
+.editorconfig
