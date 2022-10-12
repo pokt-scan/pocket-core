@@ -34,6 +34,9 @@ type PocketConfig struct {
 	ValidatorCacheSize        int64  `json:"validator_cache_size"`
 	ApplicationCacheSize      int64  `json:"application_cache_size"`
 	RPCTimeout                int64  `json:"rpc_timeout"`
+	RPCMaxIdleConns           int    `json:"rpc_max_idle_conns"`
+	RPCMaxConnsPerHost        int    `json:"rpc_max_conns_per_host"`
+	RPCMaxIdleConnsPerHost    int    `json:"rpc_max_idle_conns_per_host"`
 	PrometheusAddr            string `json:"pocket_prometheus_port"`
 	PrometheusMaxOpenfiles    int    `json:"prometheus_max_open_files"`
 	MaxClaimAgeForProofRetry  int    `json:"max_claim_age_for_proof_retry"`
@@ -48,6 +51,7 @@ type PocketConfig struct {
 	GenerateTokenOnStart      bool   `json:"generate_token_on_start"`
 	LeanPocket                bool   `json:"lean_pocket"`
 	LeanPocketUserKeyFileName string `json:"lean_pocket_user_key_file"`
+	MeshNode                  bool   `json:"mesh_node"`
 }
 
 func (c PocketConfig) GetLeanPocketUserKeyFilePath() string {
@@ -100,6 +104,9 @@ const (
 	DefaultPocketPrometheusListenAddr  = "8083"
 	DefaultPrometheusMaxOpenFile       = 3
 	DefaultRPCTimeout                  = 30000
+	DefaultRPCMaxIdleConns             = 1000
+	DefaultRPCMaxConnsPerHost          = 1000
+	DefaultRPCMaxIdleConnsPerHost      = 1000
 	DefaultMaxClaimProofRetryAge       = 32
 	DefaultProofPrevalidation          = false
 	DefaultCtxCacheSize                = 20
@@ -111,6 +118,7 @@ const (
 	DefaultGenerateTokenOnStart        = true
 	DefaultLeanPocket                  = false
 	DefaultLeanPocketUserKeyFileName   = "lean_nodes_keys.json"
+	DefaultMeshNode                    = false
 )
 
 func DefaultConfig(dataDir string) Config {
@@ -133,6 +141,9 @@ func DefaultConfig(dataDir string) Config {
 			ValidatorCacheSize:        DefaultValidatorCacheSize,
 			ApplicationCacheSize:      DefaultApplicationCacheSize,
 			RPCTimeout:                DefaultRPCTimeout,
+			RPCMaxIdleConns:           DefaultRPCMaxIdleConns,
+			RPCMaxConnsPerHost:        DefaultRPCMaxConnsPerHost,
+			RPCMaxIdleConnsPerHost:    DefaultRPCMaxIdleConnsPerHost,
 			PrometheusAddr:            DefaultPocketPrometheusListenAddr,
 			PrometheusMaxOpenfiles:    DefaultPrometheusMaxOpenFile,
 			MaxClaimAgeForProofRetry:  DefaultMaxClaimProofRetryAge,
@@ -146,6 +157,7 @@ func DefaultConfig(dataDir string) Config {
 			GenerateTokenOnStart:      DefaultGenerateTokenOnStart,
 			LeanPocket:                DefaultLeanPocket,
 			LeanPocketUserKeyFileName: DefaultLeanPocketUserKeyFileName,
+			MeshNode:                  DefaultMeshNode,
 		},
 	}
 	c.TendermintConfig.LevelDBOptions = config.DefaultLevelDBOpts()

@@ -26,6 +26,37 @@ const (
 	txHeightQuery          = "tx.height=%d"
 )
 
+type HealthResponse struct {
+	Version      string `json:"version"`
+	IsStarting   bool   `json:"is_starting"`
+	IsCatchingUp bool   `json:"is_catching_up"`
+	Height       int64  `json:"height"`
+}
+
+func (app PocketCoreApp) QueryHealth(version string) (res HealthResponse) {
+	res = HealthResponse{
+		Version:      version,
+		IsStarting:   true,
+		IsCatchingUp: false,
+		Height:       0,
+	}
+	res.Height = app.LastBlockHeight()
+	_, err := app.NewContext(res.Height)
+
+	if err != nil {
+		return
+	}
+
+	status, sErr := app.pocketKeeper.TmNode.ConsensusReactorStatus()
+	if sErr != nil {
+		return
+	}
+
+	res.IsStarting = false
+	res.IsCatchingUp = status.IsCatchingUp
+	return
+}
+
 // zero for height = latest
 func (app PocketCoreApp) QueryBlock(height *int64) (blockJSON []byte, err error) {
 	tmClient := app.GetClient()
@@ -575,7 +606,7 @@ func (app PocketCoreApp) HandleDispatch(header pocketTypes.SessionHeader) (res *
 	return app.pocketKeeper.HandleDispatch(ctx, header)
 }
 
-func (app PocketCoreApp) HandleRelay(r pocketTypes.Relay) (res *pocketTypes.RelayResponse, dispatch *pocketTypes.DispatchResponse, err error) {
+func (app PocketCoreApp) HandleRelay(r pocketTypes.Relay, isMesh bool) (res *pocketTypes.RelayResponse, dispatch *pocketTypes.DispatchResponse, err error) {
 	ctx, err := app.NewContext(app.LastBlockHeight())
 
 	if err != nil {
@@ -591,7 +622,7 @@ func (app PocketCoreApp) HandleRelay(r pocketTypes.Relay) (res *pocketTypes.Rela
 		return nil, nil, fmt.Errorf("pocket node is currently syncing to the blockchain, cannot service in this state")
 	}
 
-	res, err = app.pocketKeeper.HandleRelay(ctx, r)
+	res, err = app.pocketKeeper.HandleRelay(ctx, r, isMesh)
 	var err1 error
 	if err != nil && pocketTypes.ErrorWarrantsDispatch(err) {
 		dispatch, err1 = app.HandleDispatch(r.Proof.SessionHeader())
@@ -599,6 +630,31 @@ func (app PocketCoreApp) HandleRelay(r pocketTypes.Relay) (res *pocketTypes.Rela
 			return
 		}
 	}
+	return
+}
+
+func (app PocketCoreApp) HandleMeshSession(session pocketTypes.MeshSession) (res *pocketTypes.MeshSessionResponse, err sdk.Error) {
+	ctx, e := app.NewContext(app.LastBlockHeight())
+
+	if e != nil {
+		return nil, sdk.ErrInternal(e.Error())
+	}
+
+	status, sErr := app.pocketKeeper.TmNode.ConsensusReactorStatus()
+	if sErr != nil {
+		return nil, sdk.ErrInternal("pocket node is unable to retrieve synced status from tendermint node, cannot service in this state")
+	}
+
+	if status.IsCatchingUp {
+		return nil, sdk.ErrInternal("pocket node is currently syncing to the blockchain, cannot service in this state")
+	}
+
+	res, err = app.pocketKeeper.HandleMeshSession(ctx, session)
+
+	if e != nil {
+		return nil, err
+	}
+
 	return
 }
 

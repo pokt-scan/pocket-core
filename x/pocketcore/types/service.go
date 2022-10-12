@@ -17,11 +17,122 @@ import (
 
 const DEFAULTHTTPMETHOD = "POST"
 
+var (
+	chainHttpClient *http.Client
+)
+
 // "Relay" - A read / write API request from a hosted (non native) external blockchain
 type Relay struct {
 	Payload Payload    `json:"payload"` // the data payload of the request
 	Meta    RelayMeta  `json:"meta"`    // metadata for the relay request
 	Proof   RelayProof `json:"proof"`   // the authentication scheme needed for work
+}
+
+type MeshSession struct {
+	SessionHeader      `json:"session_header"`
+	Meta               RelayMeta `json:"meta"`
+	ServicerPubKey     string    `json:"servicer_pub_key"`
+	Blockchain         string    `json:"blockchain"`
+	SessionBlockHeight int64     `json:"session_block_height"`
+}
+
+func GetChainsClient() *http.Client {
+	if chainHttpClient == nil {
+		InitHttpClient(1000, 1000, 1000)
+	}
+
+	return chainHttpClient
+}
+
+func InitHttpClient(maxIdleConns, maxConnsPerHost, maxIdleConnsPerHost int) {
+	var chainsTransport *http.Transport
+
+	t, ok := http.DefaultTransport.(*http.Transport)
+	if ok {
+		chainsTransport = t.Clone()
+		// this params may could be handled by config.json, but how much people know about this?
+		// tbd: figure out the right values to this, rn the priority is stop recreating new http client and connections.
+		chainsTransport.MaxIdleConns = maxIdleConns
+		chainsTransport.MaxConnsPerHost = maxConnsPerHost
+		chainsTransport.MaxIdleConnsPerHost = maxIdleConnsPerHost
+	} // if not ok, probably is because is *gock.Transport - test only
+
+	chainHttpClient = &http.Client{
+		Timeout: globalRPCTimeout * time.Second,
+	}
+
+	if chainsTransport != nil {
+		chainHttpClient.Transport = chainsTransport
+	}
+}
+
+func (ms *MeshSession) Validate(ctx sdk.Ctx, posKeeper PosKeeper, appsKeeper AppsKeeper, pocketKeeper PocketKeeper, hb *HostedBlockchains, sessionBlockHeight int64, node *PocketNode) (remainingRelays sdk.BigInt, err sdk.Error) {
+	// validate the metadata
+	if err := ms.Meta.Validate(ctx); err != nil {
+		return sdk.ZeroInt(), err
+	}
+	// ensure the blockchain is supported locally
+	if !hb.Contains(ms.Blockchain) {
+		return sdk.ZeroInt(), NewUnsupportedBlockchainNodeError(ModuleName)
+	}
+	// ensure session block height == one in the relay proof
+	if ms.SessionBlockHeight != sessionBlockHeight {
+		return sdk.ZeroInt(), NewInvalidBlockHeightError(ModuleName)
+	}
+	// get the session context
+	sessionCtx, er := ctx.PrevCtx(sessionBlockHeight)
+	if er != nil {
+		return sdk.ZeroInt(), sdk.ErrInternal(er.Error())
+	}
+	// get the application that staked on behalf of the client
+	app, found := GetAppFromPublicKey(sessionCtx, appsKeeper, ms.SessionHeader.ApplicationPubKey)
+	if !found {
+		return sdk.ZeroInt(), NewAppNotFoundError(ModuleName)
+	}
+	// get session node count from that session height
+	sessionNodeCount := pocketKeeper.SessionNodeCount(sessionCtx)
+	// get max possible relays
+	maxPossibleRelays := MaxPossibleRelays(app, sessionNodeCount)
+	// generate the session header
+	header := SessionHeader{
+		ApplicationPubKey:  ms.SessionHeader.ApplicationPubKey,
+		Chain:              ms.Blockchain,
+		SessionBlockHeight: ms.SessionBlockHeight,
+	}
+	// validate unique relay
+	ev, totalRelays := GetTotalProofs(header, RelayEvidence, maxPossibleRelays, node.EvidenceStore)
+	if node.EvidenceStore.IsSealed(ev) {
+		return sdk.ZeroInt(), NewSealedEvidenceError(ModuleName)
+	}
+	// validate not over service
+	if sdk.NewInt(totalRelays).GTE(maxPossibleRelays) {
+		return sdk.ZeroInt(), NewOverServiceError(ModuleName)
+	}
+	// check cache
+	session, found := GetSession(header, node.SessionStore)
+	// if not found generate the session
+	if !found {
+		bh, err := sessionCtx.BlockHash(pocketKeeper.Codec(), sessionCtx.BlockHeight())
+		if err != nil {
+			return sdk.ZeroInt(), sdk.ErrInternal(err.Error())
+		}
+		var er sdk.Error
+		session, er = NewSession(sessionCtx, ctx, posKeeper, header, hex.EncodeToString(bh), int(sessionNodeCount))
+		if er != nil {
+			return sdk.ZeroInt(), er
+		}
+		// add to cache
+		SetSession(session, node.SessionStore)
+	}
+	// validate the session
+	err = session.Validate(node.GetAddress(), app, int(sessionNodeCount))
+	if err != nil {
+		return sdk.ZeroInt(), err
+	}
+
+	remainingRelays = maxPossibleRelays.Sub(sdk.NewInt(totalRelays))
+
+	return remainingRelays, nil
 }
 
 // "Validate" - Checks the validity of a relay request using store data
@@ -294,6 +405,11 @@ type DispatchSession struct {
 	SessionNodes  []exported.ValidatorI `json:"nodes"`
 }
 
+type MeshSessionResponse struct {
+	Session         DispatchResponse `json:"session"`
+	RemainingRelays int64            `json:"remaining_relays"`
+}
+
 // "executeHTTPRequest" takes in the raw json string and forwards it to the RPC endpoint
 func executeHTTPRequest(payload, url, userAgent string, basicAuth BasicAuth, method string, headers map[string]string) (string, error) {
 	// generate an http request
@@ -304,7 +420,7 @@ func executeHTTPRequest(payload, url, userAgent string, basicAuth BasicAuth, met
 	if basicAuth.Username != "" {
 		req.SetBasicAuth(basicAuth.Username, basicAuth.Password)
 	}
-	if userAgent == "" {
+	if userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
 	}
 	// add headers if needed
@@ -316,7 +432,7 @@ func executeHTTPRequest(payload, url, userAgent string, basicAuth BasicAuth, met
 		}
 	}
 	// execute the request
-	resp, err := (&http.Client{Timeout: globalRPCTimeout * time.Millisecond}).Do(req)
+	resp, err := GetChainsClient().Do(req)
 	if err != nil {
 		return "", err
 	}

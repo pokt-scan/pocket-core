@@ -720,9 +720,13 @@ func TestQueryRelay(t *testing.T) {
 		name         string
 		memoryNodeFn func(t *testing.T, genesisState []byte) (tendermint *node.Node, keybase keys.Keybase, cleanup func())
 		*upgrades
+		isMesh bool
 	}{
-		{name: "query relay amino", memoryNodeFn: NewInMemoryTendermintNodeAmino, upgrades: &upgrades{codecUpgrade: codecUpgrade{false, 7000}}},
-		{name: "query relay proto", memoryNodeFn: NewInMemoryTendermintNodeProto, upgrades: &upgrades{codecUpgrade: codecUpgrade{true, 2}}},
+		{name: "query relay amino", memoryNodeFn: NewInMemoryTendermintNodeAmino, upgrades: &upgrades{codecUpgrade: codecUpgrade{false, 7000}}, isMesh: false},
+		{name: "query relay proto", memoryNodeFn: NewInMemoryTendermintNodeProto, upgrades: &upgrades{codecUpgrade: codecUpgrade{true, 2}}, isMesh: false},
+		// mesh_node=true
+		{name: "query relay amino", memoryNodeFn: NewInMemoryTendermintNodeAmino, upgrades: &upgrades{codecUpgrade: codecUpgrade{false, 7000}}, isMesh: true},
+		{name: "query relay proto", memoryNodeFn: NewInMemoryTendermintNodeProto, upgrades: &upgrades{codecUpgrade: codecUpgrade{true, 2}}, isMesh: true},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -780,17 +784,29 @@ func TestQueryRelay(t *testing.T) {
 			relay.Proof.Signature = hex.EncodeToString(sig)
 			_, _, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
 			<-evtChan // Wait for block
-			res, _, err := PCA.HandleRelay(relay)
+			res, _, err := PCA.HandleRelay(relay, tc.isMesh)
 			assert.Nil(t, err, err)
-			assert.Equal(t, expectedResponse, res.Response)
-			gock.New(sdk.PlaceholderURL).
-				Post("").
-				BodyString(expectedRequest).
-				Reply(200).
-				BodyString(expectedResponse)
+			if tc.isMesh {
+				assert.Nil(t, res) // mesh does not need a "payload" response, just the 200 code to understand it works.
+				gock.New(sdk.PlaceholderURL).
+					Post("").
+					BodyString(expectedRequest).
+					// tbd: check if there is a better way to validate that executeHttp was not called.
+					Reply(500).
+					BodyString(expectedResponse)
+			} else {
+				assert.Equal(t, expectedResponse, res.Response)
+				gock.New(sdk.PlaceholderURL).
+					Post("").
+					BodyString(expectedRequest).
+					Reply(200).
+					BodyString(expectedResponse)
+			}
+
 			_, stopCli, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
 			select {
 			case <-evtChan:
+				assert.Equal(t, uint64(1), types.GlobalEvidenceWorker.SuccessfulTasks())
 				inv, err := types.GetEvidence(types.SessionHeader{
 					ApplicationPubKey:  aat.ApplicationPublicKey,
 					Chain:              relay.Proof.Blockchain,
@@ -818,9 +834,13 @@ func TestQueryRelayMultipleNodes(t *testing.T) {
 		name         string
 		memoryNodeFn func(t *testing.T, genesisState []byte, validators []crypto.PrivateKey) (tendermint *node.Node, keybase keys.Keybase, cleanup func())
 		*upgrades
+		isMesh bool
 	}{
-		{name: "query relay multiple validators amino", memoryNodeFn: NewInMemoryTendermintNodeAminoWithValidators, upgrades: &upgrades{codecUpgrade: codecUpgrade{false, 7000}}},
-		{name: "query relay multiple validators proto", memoryNodeFn: NewInMemoryTendermintNodeProtoWithValidators, upgrades: &upgrades{codecUpgrade: codecUpgrade{true, 2}}},
+		{name: "query relay multiple validators amino", memoryNodeFn: NewInMemoryTendermintNodeAminoWithValidators, upgrades: &upgrades{codecUpgrade: codecUpgrade{false, 7000}}, isMesh: false},
+		{name: "query relay multiple validators proto", memoryNodeFn: NewInMemoryTendermintNodeProtoWithValidators, upgrades: &upgrades{codecUpgrade: codecUpgrade{true, 2}}, isMesh: false},
+		// mesh_node=true
+		{name: "query relay multiple validators amino", memoryNodeFn: NewInMemoryTendermintNodeAminoWithValidators, upgrades: &upgrades{codecUpgrade: codecUpgrade{false, 7000}}, isMesh: true},
+		{name: "query relay multiple validators proto", memoryNodeFn: NewInMemoryTendermintNodeProtoWithValidators, upgrades: &upgrades{codecUpgrade: codecUpgrade{true, 2}}, isMesh: true},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -858,6 +878,9 @@ func TestQueryRelayMultipleNodes(t *testing.T) {
 			}
 			_, stopCli, evtChan := subscribeTo(t, tmTypes.EventNewBlock)
 			<-evtChan // Wait for block
+
+			chain := sdk.PlaceholderHash
+			sessionBlockHeight := int64(1)
 			// setup relay
 			for _, v := range validators {
 				relay := types.Relay{
@@ -865,9 +888,9 @@ func TestQueryRelayMultipleNodes(t *testing.T) {
 					Meta:    types.RelayMeta{BlockHeight: 5}, // todo race condition here
 					Proof: types.RelayProof{
 						Entropy:            32598345349034509,
-						SessionBlockHeight: 1,
+						SessionBlockHeight: sessionBlockHeight,
 						ServicerPubKey:     v.PublicKey().RawString(),
-						Blockchain:         sdk.PlaceholderHash,
+						Blockchain:         chain,
 						Token:              aat,
 						Signature:          "",
 					},
@@ -878,31 +901,50 @@ func TestQueryRelayMultipleNodes(t *testing.T) {
 					panic(err)
 				}
 				relay.Proof.Signature = hex.EncodeToString(sig)
-				res, _, err := PCA.HandleRelay(relay)
+				res, _, err := PCA.HandleRelay(relay, tc.isMesh)
 				assert.Nil(t, err, err)
-				assert.Equal(t, expectedResponse, res.Response)
-				gock.New(sdk.PlaceholderURL).
-					Post("").
-					BodyString(expectedRequest).
-					Reply(200).
-					BodyString(expectedResponse)
-
-				validatorAddress := sdk.GetAddress(v.PublicKey())
-				node, nodeErr := types.GetPocketNodeByAddress(&validatorAddress)
-
-				assert.Nil(t, nodeErr)
-				inv, err := types.GetEvidence(types.SessionHeader{
-					ApplicationPubKey:  aat.ApplicationPublicKey,
-					Chain:              relay.Proof.Blockchain,
-					SessionBlockHeight: relay.Proof.SessionBlockHeight,
-				}, types.RelayEvidence, sdk.NewInt(10000), node.EvidenceStore)
-				assert.Nil(t, err)
-				assert.NotNil(t, inv)
-				assert.Equal(t, inv.NumOfProofs, int64(1))
+				if tc.isMesh {
+					assert.Nil(t, res) // mesh does not need a "payload" response, just the 200 code to understand it works.
+					gock.New(sdk.PlaceholderURL).
+						Post("").
+						BodyString(expectedRequest).
+						// tbd: check if there is a better way to validate that executeHttp was not called.
+						Reply(500).
+						BodyString(expectedResponse)
+				} else {
+					assert.Equal(t, expectedResponse, res.Response)
+					gock.New(sdk.PlaceholderURL).
+						Post("").
+						BodyString(expectedRequest).
+						Reply(200).
+						BodyString(expectedResponse)
+				}
 			}
-			cleanup()
-			stopCli()
-			gock.Off()
+
+			select {
+			case <-evtChan:
+				// verify that each store task was successful
+				assert.Equal(t, uint64(len(validators)), types.GlobalEvidenceWorker.SuccessfulTasks())
+				// check the evidence store of each node.
+				for _, v := range validators {
+					validatorAddress := sdk.GetAddress(v.PublicKey())
+					_node, nodeErr := types.GetPocketNodeByAddress(&validatorAddress)
+
+					assert.Nil(t, nodeErr)
+					inv, err := types.GetEvidence(types.SessionHeader{
+						ApplicationPubKey:  aat.ApplicationPublicKey,
+						Chain:              chain,
+						SessionBlockHeight: sessionBlockHeight,
+					}, types.RelayEvidence, sdk.NewInt(10000), _node.EvidenceStore)
+					assert.Nil(t, err)
+					assert.NotNil(t, inv)
+					assert.Equal(t, int64(1), inv.NumOfProofs)
+				}
+
+				cleanup()
+				stopCli()
+				gock.Off()
+			}
 			return
 		})
 	}
