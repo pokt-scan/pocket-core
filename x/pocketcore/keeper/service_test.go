@@ -66,8 +66,10 @@ func TestKeeper_HandleRelay(t *testing.T) {
 		t.Fatalf(er.Error())
 	}
 	validRelay.Proof.Signature = hex.EncodeToString(clientSig)
+	httpClient := types.GetChainsClient()
 	defer gock.Off() // Flush pending mocks after test execution
-
+	defer gock.RestoreClient(httpClient)
+	gock.InterceptClient(httpClient)
 	gock.New("https://www.google.com:443").
 		Post("/").
 		Reply(200).
@@ -82,7 +84,7 @@ func TestKeeper_HandleRelay(t *testing.T) {
 	mockCtx.On("PrevCtx", keeper.GetLatestSessionBlockHeight(mockCtx)).Return(ctx, nil)
 	mockCtx.On("Logger").Return(ctx.Logger())
 
-	resp, err := keeper.HandleRelay(mockCtx, validRelay)
+	resp, err := keeper.HandleRelay(mockCtx, validRelay, false)
 	assert.Nil(t, err, err)
 	assert.NotNil(t, resp)
 	assert.NotEmpty(t, resp)
