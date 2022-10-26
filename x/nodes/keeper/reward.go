@@ -20,9 +20,7 @@ func (k Keeper) RewardForRelays(ctx sdk.Ctx, relays sdk.BigInt, address sdk.Addr
 
 	// get validator
 	validator, found := k.GetValidator(ctx, address)
-
-	//adding "&& (isAfterRSCAL || isAfterNonCustodial)" to sync from scratch as weighted stake and non-custodial introduced this requirement
-	if !found && (isAfterRSCAL || isAfterNonCustodial) {
+	if !found {
 		ctx.Logger().Error(fmt.Errorf("no validator found for address %s; at height %d\n", address.String(), ctx.BlockHeight()).Error())
 		return sdk.ZeroInt()
 	}
