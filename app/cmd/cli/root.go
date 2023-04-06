@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"github.com/pokt-network/pocket-core/app/cmd/rpc/mesh"
 	"log"
 	"os"
 	"os/signal"
@@ -141,7 +140,7 @@ var meshCmd = &cobra.Command{
 
 func startMesh(cmd *cobra.Command, args []string) {
 	app.InitMeshConfig(datadir)
-	mesh.StartMeshRPC(simulateRelay)
+	rpc.StartMeshRPC(simulateRelay)
 }
 
 // resetCmd represents the reset command
