@@ -14,71 +14,137 @@ var (
 
 type MeshConfig struct {
 	// Mesh Node
-	DataDir                string `json:"data_dir"`
-	RPCPort                string `json:"rpc_port"`
-	ChainsName             string `json:"chains_name"`
-	RPCTimeout             int64  `json:"rpc_timeout"`
-	LogLevel               string `json:"log_level"`
-	UserAgent              string `json:"user_agent"`
-	AuthTokenFile          string `json:"auth_token_file"`
-	JSONSortRelayResponses bool   `json:"json_sort_relay_responses"`
-	// Prometheus
-	PrometheusAddr         string `json:"pocket_prometheus_port"`
-	PrometheusMaxOpenfiles int    `json:"prometheus_max_open_files"`
+	DataDir                    string `json:"data_dir"`
+	RPCPort                    string `json:"rpc_port"`
+	ClientRPCTimeout           int64  `json:"client_rpc_timeout"`
+	ClientRPCReadTimeout       int64  `json:"client_rpc_read_timeout"`
+	ClientRPCReadHeaderTimeout int64  `json:"client_rpc_read_header_timeout"`
+	ClientRPCWriteTimeout      int64  `json:"client_rpc_write_timeout"`
+	LogLevel                   string `json:"log_level"`
+	LogChainRequest            bool   `json:"log_chain_request"`
+	LogChainResponse           bool   `json:"log_chain_response"`
+	UserAgent                  string `json:"user_agent"`
+	AuthTokenFile              string `json:"auth_token_file"`
+	JSONSortRelayResponses     bool   `json:"json_sort_relay_responses"`
+
+	// Chains
+	ChainsName                  string `json:"chains_name"`
+	ChainsNameMap               string `json:"chains_name_map"`
+	RemoteChainsNameMap         string `json:"remote_chains_name_map"`
+	ChainRPCTimeout             int64  `json:"chain_rpc_timeout"`
+	ChainRPCMaxIdleConnections  int    `json:"chain_rpc_max_idle_connections"`
+	ChainRPCMaxConnsPerHost     int    `json:"chain_rpc_max_conns_per_host"`
+	ChainRPCMaxIdleConnsPerHost int    `json:"chain_rpc_max_idle_conns_per_host"`
+	ChainDropConnections        bool   `json:"chain_drop_connections"`
+	ChainRequestPathCleanup     bool   `json:"chain_request_path_cleanup"`
+
 	// Relay Cache
 	RelayCacheFile                         string `json:"relay_cache_file"`
 	RelayCacheBackgroundSyncInterval       int    `json:"relay_cache_background_sync_interval"`
 	RelayCacheBackgroundCompactionInterval int    `json:"relay_cache_background_compaction_interval"`
+
 	// Hot Reload Interval in milliseconds
-	HotReloadInterval int `json:"hot_reload_interval"`
-	// Workers
-	WorkerStrategy     string `json:"worker_strategy"`
-	MaxWorkers         int    `json:"max_workers"`
-	MaxWorkersCapacity int    `json:"max_workers_capacity"`
-	WorkersIdleTimeout int    `json:"workers_idle_timeout"`
+	KeysHotReloadInterval   int `json:"keys_hot_reload_interval"`
+	ChainsHotReloadInterval int `json:"chains_hot_reload_interval"`
+
 	// Servicer
-	ServicerPrivateKeyFile string `json:"servicer_private_key_file"`
-	ServicerURL            string `json:"servicer_url"`
-	ServicerRPCTimeout     int64  `json:"servicer_rpc_timeout"`
-	ServicerAuthTokenFile  string `json:"servicer_auth_token_file"`
-	ServicerRetryMaxTimes  int    `json:"servicer_retry_max_times"`
-	ServicerRetryWaitMin   int    `json:"servicer_retry_wait_min"`
-	ServicerRetryWaitMax   int    `json:"servicer_retry_wait_max"`
+	ServicerWorkerStrategy         string `json:"servicer_worker_strategy"`
+	ServicerMaxWorkers             int    `json:"servicer_max_workers"`
+	ServicerMaxWorkersCapacity     int    `json:"servicer_max_workers_capacity"`
+	ServicerWorkersIdleTimeout     int    `json:"servicer_workers_idle_timeout"`
+	ServicerPrivateKeyFile         string `json:"servicer_private_key_file"`
+	ServicerRPCTimeout             int64  `json:"servicer_rpc_timeout"`
+	ServicerRPCMaxIdleConnections  int    `json:"servicer_rpc_max_idle_connections"`
+	ServicerRPCMaxConnsPerHost     int    `json:"servicer_rpc_max_conns_per_host"`
+	ServicerRPCMaxIdleConnsPerHost int    `json:"servicer_rpc_max_idle_conns_per_host"`
+	ServicerAuthTokenFile          string `json:"servicer_auth_token_file"`
+	ServicerRetryMaxTimes          int    `json:"servicer_retry_max_times"`
+	ServicerRetryWaitMin           int    `json:"servicer_retry_wait_min"`
+	ServicerRetryWaitMax           int    `json:"servicer_retry_wait_max"`
+
+	// Node Health check interval (seconds)
+	NodeCheckInterval int `json:"node_check_interval"`
+
+	// Session cache (in-memory) clean up interval (seconds)
+	SessionCacheCleanUpInterval int `json:"session_cache_clean_up_interval"`
+
+	// Prometheus
+	PrometheusAddr         string `json:"pocket_prometheus_port"`
+	PrometheusMaxOpenfiles int    `json:"prometheus_max_open_files"`
+	// Metrics uniq moniker name
+	MetricsMoniker string `json:"metrics_moniker"`
+	// Metrics Workers
+	MetricsWorkerStrategy      string `json:"metrics_worker_strategy"`
+	MetricsMaxWorkers          int    `json:"metrics_max_workers"`
+	MetricsMaxWorkersCapacity  int    `json:"metrics_max_workers_capacity"`
+	MetricsWorkersIdleTimeout  int    `json:"metrics_workers_idle_timeout"`
+	MetricsAttachServicerLabel bool   `json:"metrics_attach_servicer_label"`
+	// Metrics report interval in seconds
+	MetricsReportInterval int `json:"metrics_report_interval"`
 }
 
 func defaultMeshConfig(dataDir string) MeshConfig {
 	c := MeshConfig{
 		// Mesh Node
-		DataDir:                dataDir,
-		RPCPort:                sdk.DefaultRPCPort,
-		ChainsName:             sdk.DefaultChainsName,
-		RPCTimeout:             sdk.DefaultRPCTimeout,
-		LogLevel:               "*:info, *:error",
-		UserAgent:              sdk.DefaultUserAgent,
-		AuthTokenFile:          "auth" + FS + "mesh.json",
-		JSONSortRelayResponses: sdk.DefaultJSONSortRelayResponses,
-		// Prometheus
-		PrometheusAddr:         sdk.DefaultPocketPrometheusListenAddr,
-		PrometheusMaxOpenfiles: sdk.DefaultPrometheusMaxOpenFile,
+		DataDir: dataDir,
+		RPCPort: sdk.DefaultRPCPort,
+		// following values are to be able to handle very big response from blockchains.
+		ClientRPCTimeout:           120000,
+		ClientRPCReadTimeout:       60000,
+		ClientRPCReadHeaderTimeout: 50000,
+		ClientRPCWriteTimeout:      90000,
+		LogLevel:                   "*:error",
+		LogChainRequest:            false,
+		LogChainResponse:           false,
+		UserAgent:                  "mesh-node",
+		AuthTokenFile:              "auth" + FS + "mesh.json",
+		JSONSortRelayResponses:     sdk.DefaultJSONSortRelayResponses,
+		// Chains
+		ChainsName:                  sdk.DefaultChainsName,
+		ChainsNameMap:               "",
+		RemoteChainsNameMap:         "",
+		ChainRPCTimeout:             80000,
+		ChainRPCMaxIdleConnections:  2500,
+		ChainRPCMaxConnsPerHost:     2500,
+		ChainRPCMaxIdleConnsPerHost: 2500,
+		ChainDropConnections:        false,
+		ChainRequestPathCleanup:     false,
 		// Relay Cache
 		RelayCacheFile:                         "data" + FS + "relays.pkt",
 		RelayCacheBackgroundSyncInterval:       3600,
 		RelayCacheBackgroundCompactionInterval: 18000,
 		// Hot Reload
-		HotReloadInterval: 180000,
-		// Worker
-		WorkerStrategy:     "balanced",
-		MaxWorkers:         10,
-		MaxWorkersCapacity: 1000,
-		WorkersIdleTimeout: 100,
+		KeysHotReloadInterval:   180000,
+		ChainsHotReloadInterval: 180000,
 		// Servicer
-		ServicerPrivateKeyFile: "key" + FS + "key.json",
-		ServicerURL:            sdk.DefaultRemoteCLIURL,
-		ServicerRPCTimeout:     sdk.DefaultRPCTimeout,
-		ServicerAuthTokenFile:  "auth" + FS + "servicer.json",
-		ServicerRetryMaxTimes:  10,
-		ServicerRetryWaitMin:   5,
-		ServicerRetryWaitMax:   180,
+		ServicerPrivateKeyFile:         "key" + FS + "key.json",
+		ServicerRPCTimeout:             60000,
+		ServicerRPCMaxIdleConnections:  2500,
+		ServicerRPCMaxConnsPerHost:     2500,
+		ServicerRPCMaxIdleConnsPerHost: 2500,
+		ServicerAuthTokenFile:          "auth" + FS + "servicer.json",
+		ServicerRetryMaxTimes:          10,
+		ServicerRetryWaitMin:           5,
+		ServicerRetryWaitMax:           180000,
+		ServicerWorkerStrategy:         "balanced",
+		ServicerMaxWorkers:             50,
+		ServicerMaxWorkersCapacity:     50000,
+		ServicerWorkersIdleTimeout:     10000,
+		// Node Check
+		NodeCheckInterval: 60,
+		// Session cache (in-memory) clean up interval (seconds)
+		SessionCacheCleanUpInterval: 1800,
+		// Metrics
+		// Prometheus
+		PrometheusAddr:             sdk.DefaultPocketPrometheusListenAddr,
+		PrometheusMaxOpenfiles:     sdk.DefaultPrometheusMaxOpenFile,
+		MetricsMoniker:             "geo-mesh-node",
+		MetricsAttachServicerLabel: false,
+		MetricsWorkerStrategy:      "balanced",
+		MetricsMaxWorkers:          50,
+		MetricsMaxWorkersCapacity:  50000,
+		MetricsWorkersIdleTimeout:  10000,
+		MetricsReportInterval:      10,
 	}
 
 	return c
