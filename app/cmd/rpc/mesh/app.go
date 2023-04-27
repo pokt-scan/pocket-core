@@ -141,7 +141,7 @@ func StopRPC() {
 func StartRPC(routes Routes) {
 	fiberApp = fiber.New(fiber.Config{
 		ServerHeader:  "Geo-Mesh",
-		AppName:       app.AppVersion,
+		AppName:       AppVersion,
 		Prefork:       false,
 		CaseSensitive: true,
 		StrictRouting: true,
