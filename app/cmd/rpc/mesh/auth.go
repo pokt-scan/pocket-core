@@ -1,7 +1,7 @@
 package mesh
 
 import (
-	"encoding/json"
+	"github.com/goccy/go-json"
 	"github.com/pokt-network/pocket-core/app"
 	sdk "github.com/pokt-network/pocket-core/types"
 	"io/ioutil"

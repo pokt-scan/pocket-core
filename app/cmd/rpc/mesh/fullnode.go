@@ -1,17 +1,15 @@
 package mesh
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/alitto/pond"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/goccy/go-json"
 	"github.com/pokt-network/pocket-core/app"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/robfig/cron/v3"
-	"io"
-	"io/ioutil"
+	"github.com/valyala/fasthttp"
 	log2 "log"
 	"net/http"
 	"net/url"
@@ -69,52 +67,69 @@ func (node *fullNode) stop() {
 	logger.Debug(fmt.Sprintf("metrics of node %s stopped!", node.URL))
 }
 
-// checkNodeEndpoint - check node endpoint
-func (node *fullNode) checkNodeEndpoint(endpoint string) error {
-	requestURL := fmt.Sprintf(
-		"%s%s?verify=true",
+// RunRequest - Call node with all the needed headers. Return error on non 200 code. Parse response if receive payload interface
+func (node *fullNode) RunRequest(endpoint string, queryString string, payload interface{}, r interface{}) error {
+	uri := fmt.Sprintf(
+		"%s%s",
 		node.URL,
 		endpoint,
 	)
-	req, err := http.NewRequest("POST", requestURL, nil)
-	req.Header.Set("Content-Type", "application/json")
+
+	body, e := json.Marshal(payload)
+	if e != nil {
+		return e
+	}
+
+	// per-request timeout
+	reqTimeout := time.Duration(app.GlobalMeshConfig.ServicerRPCTimeout) * time.Millisecond
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(uri)
+	if queryString != "" {
+		req.URI().SetQueryString(queryString)
+	}
+	req.Header.SetMethod(fasthttp.MethodPost)
+	req.Header.SetContentType("application/json")
 	req.Header.Set(AuthorizationHeader, servicerAuthToken.Value)
 	if app.GlobalMeshConfig.UserAgent != "" {
 		req.Header.Set("User-Agent", app.GlobalMeshConfig.UserAgent)
 	}
-	resp, err := servicerClient.Do(req)
+	req.SetBodyRaw(body)
+
+	resp := fasthttp.AcquireResponse()
+	err := servicerClient.DoTimeout(req, resp, reqTimeout)
+	fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
 
 	if err != nil {
 		return err
 	}
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			logger.Error(err.Error())
-			return
+	if resp.StatusCode() != http.StatusOK || !strings.Contains(string(resp.Header.ContentType()), "application/json") {
+		if resp.StatusCode() != http.StatusOK {
+			err = errors.New(fmt.Sprintf("node is returning a non 200 code response from %s", uri))
+		} else {
+			err = errors.New(fmt.Sprintf("node is returning a non json response from %s", uri))
 		}
-	}(resp.Body)
 
-	// read the body just to allow http 1.x be able to reuse the connection
-	_, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		e := errors.New(fmt.Sprintf("Couldn't parse response body. Error: %s", err.Error()))
-		return e
+		return err
 	}
 
-	isSuccess := resp.StatusCode == 200
+	// if no need to parse response body, just return.
+	if r == nil {
+		return nil
+	}
 
-	if !isSuccess {
-		return errors.New(
-			fmt.Sprintf(
-				"error=StatusCode != 200 code=%d",
-				resp.StatusCode,
-			),
-		)
+	err = json.Unmarshal(resp.Body(), r)
+	if err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// checkNodeEndpoint - check node endpoint
+func (node *fullNode) checkNodeEndpoint(endpoint string) error {
+	return node.RunRequest(endpoint, "verify=true", nil, nil)
 }
 
 // runCheck - check that node is able to work as expected
@@ -131,7 +146,7 @@ func (node *fullNode) runCheck() error {
 		return true
 	})
 
-	payload := CheckPayload{
+	payload := &CheckPayload{
 		Servicers: servicers,
 		Chains:    make([]string, 0),
 	}
@@ -140,57 +155,9 @@ func (node *fullNode) runCheck() error {
 		payload.Chains = append(payload.Chains, chain.ID)
 	}
 
-	jsonData, e := json.Marshal(payload)
-	if e != nil {
-		return e
-	}
-
-	requestURL := fmt.Sprintf(
-		"%s%s",
-		node.URL,
-		ServicerCheckEndpoint,
-	)
-	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(jsonData))
-	req.Header.Set(AuthorizationHeader, servicerAuthToken.Value)
-	if err != nil {
-		return err
-	}
-
-	if app.GlobalMeshConfig.UserAgent != "" {
-		req.Header.Set("User-Agent", app.GlobalMeshConfig.UserAgent)
-	}
-	resp, err := servicerClient.Do(req)
-
-	if err != nil {
-		return err
-	}
-
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			return // add log here
-		}
-	}(resp.Body)
-
-	// read the body just to allow http 1.x be able to reuse the connection
-	body, err := ioutil.ReadAll(resp.Body)
-
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != 200 || !strings.Contains(resp.Header.Get("Content-Type"), "application/json") {
-		if resp.StatusCode != 200 {
-			err = errors.New(fmt.Sprintf("node is returning a non 200 code response from %s", requestURL))
-		} else {
-			err = errors.New(fmt.Sprintf("node is returning a non json response from %s", requestURL))
-		}
-
-		return err
-	}
-
 	res := &CheckResponse{}
-	err = json.Unmarshal(body, &res)
+	err := node.RunRequest(ServicerCheckEndpoint, "", payload, res)
+
 	if err != nil {
 		return err
 	}

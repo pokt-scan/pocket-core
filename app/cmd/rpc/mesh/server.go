@@ -4,19 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"github.com/akrylysov/pogreb"
+	"github.com/goccy/go-json"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/proxy"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/julienschmidt/httprouter"
 	"github.com/pokt-network/pocket-core/app"
 	pocketTypes "github.com/pokt-network/pocket-core/x/pocketcore/types"
 	"github.com/robfig/cron/v3"
+	"github.com/valyala/fasthttp"
 	"io"
 	log2 "log"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -24,8 +24,23 @@ import (
 	"time"
 )
 
+type Route struct {
+	Name        string
+	Method      string
+	Path        string
+	Auth        bool
+	HandlerFunc fiber.Handler
+}
+
+type Routes []Route
+
 type transport struct {
 	http.RoundTripper
+}
+
+type rpcError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 // RoundTrip - handle http requests before/after they run and hook to response handlers bases on path.
@@ -139,55 +154,105 @@ func retryRelaysPolicy(ctx context.Context, resp *http.Response, err error) (boo
 	return false, nil
 }
 
-// serveReverseProxy - forward request to ServicerURL
-func serveReverseProxy(target string, res http.ResponseWriter, req *http.Request) {
-	// parse the url
-	u, _ := url.Parse(target)
-
-	// create the reverse proxy
-	proxy := httputil.NewSingleHostReverseProxy(u)
-	proxy.Transport = &transport{http.DefaultTransport}
-
-	// Update the headers to allow for SSL redirection
-	req.URL.Host = u.Host
-	req.URL.Scheme = u.Scheme
-	req.Header.Set("X-Forwarded-Host", req.Header.Get("Host"))
-	req.Host = u.Host
-
-	// Note that ServeHttp is non-blocking and uses a go routine under the hood
-	proxy.ServeHTTP(res, req)
+// ProxyRequest - proxy request to ServicerURL
+func ProxyRequest(c *fiber.Ctx) error {
+	target := fmt.Sprintf("%s%s", GetRandomNode().URL, c.Path())
+	if err := proxy.Do(c, target); err != nil {
+		return err
+	}
+	// Remove Server header from response
+	c.Response().Header.Del(fiber.HeaderServer)
+	return nil
 }
 
-// ProxyRequest - proxy request to ServicerURL
-func ProxyRequest(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	serveReverseProxy(GetRandomNode().URL, w, r)
+// IsAuthorized - Fiber Middleware to validate authorization header
+func IsAuthorized(c *fiber.Ctx) error {
+	token := c.GetReqHeaders()[AuthorizationHeader]
+
+	if token == "" {
+		// fallback support
+		token = c.Query("authtoken")
+	}
+
+	if token != GetAuthToken() {
+		return fiber.NewError(401, "Unauthorized")
+	}
+
+	// continue
+	return c.Next()
+}
+
+// WriteResponse - Fiber success response sugar function
+func WriteResponse(body interface{}, c *fiber.Ctx) error {
+	if e := c.JSON(body); e != nil {
+		return WriteError(500, e.Error(), c)
+	}
+	c.Set("Content-type", "application/json; charset=utf-8")
+	c.Status(200)
+	return nil
+}
+
+// WriteError - Fiber error response sugar function
+func WriteError(code int, message string, c *fiber.Ctx) error {
+	e := c.JSON(&rpcError{
+		Code:    code,
+		Message: message,
+	})
+
+	if e != nil {
+		return fiber.NewError(500, e.Error())
+	}
+
+	c.Set("Content-type", "application/json; charset=utf-8")
+
+	return nil
 }
 
 // prepareHttpClients - prepare http clients & transports
 func prepareHttpClients() {
 	logger.Info("initializing http clients")
-	chainsTransport := http.DefaultTransport.(*http.Transport).Clone()
-	chainsTransport.MaxIdleConns = app.GlobalMeshConfig.ChainRPCMaxIdleConnections
-	chainsTransport.MaxConnsPerHost = app.GlobalMeshConfig.ChainRPCMaxConnsPerHost
-	chainsTransport.MaxIdleConnsPerHost = app.GlobalMeshConfig.ChainRPCMaxIdleConnsPerHost
-
 	servicerTransport := http.DefaultTransport.(*http.Transport).Clone()
 	servicerTransport.MaxIdleConns = app.GlobalMeshConfig.ServicerRPCMaxIdleConnections
 	servicerTransport.MaxConnsPerHost = app.GlobalMeshConfig.ServicerRPCMaxConnsPerHost
 	servicerTransport.MaxIdleConnsPerHost = app.GlobalMeshConfig.ServicerRPCMaxIdleConnsPerHost
 
-	chainsClient = &http.Client{
-		Timeout:   time.Duration(app.GlobalMeshConfig.ChainRPCTimeout) * time.Millisecond,
-		Transport: chainsTransport,
+	maxIdleConnDuration, _ := time.ParseDuration("1h")
+
+	chainsClient = &fasthttp.Client{
+		ReadTimeout:                   time.Duration(app.GlobalMeshConfig.ChainRPCReadTimeout) * time.Millisecond,
+		WriteTimeout:                  time.Duration(app.GlobalMeshConfig.ChainRPCWriteTimeout) * time.Millisecond,
+		MaxIdleConnDuration:           maxIdleConnDuration,
+		NoDefaultUserAgentHeader:      true, // Don't send: User-Agent: fasthttp
+		DisableHeaderNamesNormalizing: true, // If you set the case on your headers correctly you can enable this
+		DisablePathNormalizing:        false,
+		MaxConnsPerHost:               app.GlobalMeshConfig.ChainRPCMaxConnsPerHost,
+		// increase DNS cache time to an hour instead of default minute
+		Dial: (&fasthttp.TCPDialer{
+			Concurrency:      4096,
+			DNSCacheDuration: time.Hour,
+		}).Dial,
 	}
-	servicerClient = &http.Client{
-		Timeout:   time.Duration(app.GlobalMeshConfig.ServicerRPCTimeout) * time.Millisecond,
-		Transport: servicerTransport,
+	servicerClient = &fasthttp.Client{
+		ReadTimeout:                   time.Duration(app.GlobalMeshConfig.ServicerRPCReadTimeout) * time.Millisecond,
+		WriteTimeout:                  time.Duration(app.GlobalMeshConfig.ServicerRPCWriteTimeout) * time.Millisecond,
+		MaxIdleConnDuration:           maxIdleConnDuration,
+		MaxConnsPerHost:               app.GlobalMeshConfig.ServicerRPCMaxConnsPerHost,
+		NoDefaultUserAgentHeader:      true, // Don't send: User-Agent: fasthttp
+		DisableHeaderNamesNormalizing: true, // If you set the case on your headers correctly you can enable this
+		DisablePathNormalizing:        false,
+		// increase DNS cache time to an hour instead of default minute
+		Dial: (&fasthttp.TCPDialer{
+			Concurrency:      4096,
+			DNSCacheDuration: time.Hour,
+		}).Dial,
 	}
 
 	relaysClient = retryablehttp.NewClient()
 	relaysClient.RetryMax = app.GlobalMeshConfig.ServicerRetryMaxTimes
-	relaysClient.HTTPClient = servicerClient
+	relaysClient.HTTPClient = &http.Client{
+		Timeout:   time.Duration(app.GlobalMeshConfig.ServicerRPCTimeout) * time.Millisecond,
+		Transport: servicerTransport,
+	}
 	relaysClient.Logger = &LevelHTTPLogger{}
 	relaysClient.RetryWaitMin = time.Duration(app.GlobalMeshConfig.ServicerRetryWaitMin) * time.Millisecond
 	relaysClient.RetryWaitMax = time.Duration(app.GlobalMeshConfig.ServicerRetryWaitMax) * time.Millisecond

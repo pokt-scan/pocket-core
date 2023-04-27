@@ -28,15 +28,15 @@ type MeshConfig struct {
 	JSONSortRelayResponses     bool   `json:"json_sort_relay_responses"`
 
 	// Chains
-	ChainsName                  string `json:"chains_name"`
-	ChainsNameMap               string `json:"chains_name_map"`
-	RemoteChainsNameMap         string `json:"remote_chains_name_map"`
-	ChainRPCTimeout             int64  `json:"chain_rpc_timeout"`
-	ChainRPCMaxIdleConnections  int    `json:"chain_rpc_max_idle_connections"`
-	ChainRPCMaxConnsPerHost     int    `json:"chain_rpc_max_conns_per_host"`
-	ChainRPCMaxIdleConnsPerHost int    `json:"chain_rpc_max_idle_conns_per_host"`
-	ChainDropConnections        bool   `json:"chain_drop_connections"`
-	ChainRequestPathCleanup     bool   `json:"chain_request_path_cleanup"`
+	ChainsName              string `json:"chains_name"`
+	ChainsNameMap           string `json:"chains_name_map"`
+	RemoteChainsNameMap     string `json:"remote_chains_name_map"`
+	ChainRPCTimeout         int64  `json:"chain_rpc_timeout"`
+	ChainRPCReadTimeout     int64  `json:"chain_rpc_read_timeout"`
+	ChainRPCWriteTimeout    int64  `json:"chain_rpc_write_timeout"`
+	ChainRPCMaxConnsPerHost int    `json:"chain_rpc_max_conns_per_host"`
+	ChainDropConnections    bool   `json:"chain_drop_connections"`
+	ChainRequestPathCleanup bool   `json:"chain_request_path_cleanup"`
 
 	// Relay Cache
 	RelayCacheFile                         string `json:"relay_cache_file"`
@@ -54,6 +54,8 @@ type MeshConfig struct {
 	ServicerWorkersIdleTimeout     int    `json:"servicer_workers_idle_timeout"`
 	ServicerPrivateKeyFile         string `json:"servicer_private_key_file"`
 	ServicerRPCTimeout             int64  `json:"servicer_rpc_timeout"`
+	ServicerRPCReadTimeout         int64  `json:"servicer_rpc_read_timeout"`
+	ServicerRPCWriteTimeout        int64  `json:"servicer_rpc_write_timeout"`
 	ServicerRPCMaxIdleConnections  int    `json:"servicer_rpc_max_idle_connections"`
 	ServicerRPCMaxConnsPerHost     int    `json:"servicer_rpc_max_conns_per_host"`
 	ServicerRPCMaxIdleConnsPerHost int    `json:"servicer_rpc_max_idle_conns_per_host"`
@@ -89,26 +91,25 @@ func defaultMeshConfig(dataDir string) MeshConfig {
 		DataDir: dataDir,
 		RPCPort: sdk.DefaultRPCPort,
 		// following values are to be able to handle very big response from blockchains.
-		ClientRPCTimeout:           120000,
-		ClientRPCReadTimeout:       60000,
-		ClientRPCReadHeaderTimeout: 50000,
-		ClientRPCWriteTimeout:      90000,
-		LogLevel:                   "*:error",
-		LogChainRequest:            false,
-		LogChainResponse:           false,
-		UserAgent:                  "mesh-node",
-		AuthTokenFile:              "auth" + FS + "mesh.json",
-		JSONSortRelayResponses:     sdk.DefaultJSONSortRelayResponses,
+		ClientRPCTimeout:       120000,
+		ClientRPCReadTimeout:   60000,
+		ClientRPCWriteTimeout:  90000,
+		LogLevel:               "*:error",
+		LogChainRequest:        false,
+		LogChainResponse:       false,
+		UserAgent:              "mesh-node",
+		AuthTokenFile:          "auth" + FS + "mesh.json",
+		JSONSortRelayResponses: sdk.DefaultJSONSortRelayResponses,
 		// Chains
-		ChainsName:                  sdk.DefaultChainsName,
-		ChainsNameMap:               "",
-		RemoteChainsNameMap:         "",
-		ChainRPCTimeout:             80000,
-		ChainRPCMaxIdleConnections:  2500,
-		ChainRPCMaxConnsPerHost:     2500,
-		ChainRPCMaxIdleConnsPerHost: 2500,
-		ChainDropConnections:        false,
-		ChainRequestPathCleanup:     false,
+		ChainsName:              sdk.DefaultChainsName,
+		ChainsNameMap:           "",
+		RemoteChainsNameMap:     "",
+		ChainRPCTimeout:         80000,
+		ChainRPCReadTimeout:     45000,
+		ChainRPCWriteTimeout:    60000,
+		ChainRPCMaxConnsPerHost: 10000,
+		ChainDropConnections:    false,
+		ChainRequestPathCleanup: false,
 		// Relay Cache
 		RelayCacheFile:                         "data" + FS + "relays.pkt",
 		RelayCacheBackgroundSyncInterval:       3600,
@@ -117,19 +118,19 @@ func defaultMeshConfig(dataDir string) MeshConfig {
 		KeysHotReloadInterval:   180000,
 		ChainsHotReloadInterval: 180000,
 		// Servicer
-		ServicerPrivateKeyFile:         "key" + FS + "key.json",
-		ServicerRPCTimeout:             60000,
-		ServicerRPCMaxIdleConnections:  2500,
-		ServicerRPCMaxConnsPerHost:     2500,
-		ServicerRPCMaxIdleConnsPerHost: 2500,
-		ServicerAuthTokenFile:          "auth" + FS + "servicer.json",
-		ServicerRetryMaxTimes:          10,
-		ServicerRetryWaitMin:           5,
-		ServicerRetryWaitMax:           180000,
-		ServicerWorkerStrategy:         "balanced",
-		ServicerMaxWorkers:             50,
-		ServicerMaxWorkersCapacity:     50000,
-		ServicerWorkersIdleTimeout:     10000,
+		ServicerPrivateKeyFile:     "key" + FS + "key.json",
+		ServicerRPCTimeout:         60000,
+		ServicerRPCReadTimeout:     60000,
+		ServicerRPCWriteTimeout:    60000,
+		ServicerRPCMaxConnsPerHost: 10000,
+		ServicerAuthTokenFile:      "auth" + FS + "servicer.json",
+		ServicerRetryMaxTimes:      10,
+		ServicerRetryWaitMin:       5,
+		ServicerRetryWaitMax:       180000,
+		ServicerWorkerStrategy:     "balanced",
+		ServicerMaxWorkers:         50,
+		ServicerMaxWorkersCapacity: 50000,
+		ServicerWorkersIdleTimeout: 10000,
 		// Node Check
 		NodeCheckInterval: 60,
 		// Session cache (in-memory) clean up interval (seconds)

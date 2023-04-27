@@ -1,10 +1,10 @@
 package mesh
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/alitto/pond"
+	"github.com/goccy/go-json"
 	"github.com/pokt-network/pocket-core/app"
 	"github.com/pokt-network/pocket-core/crypto"
 	sdk "github.com/pokt-network/pocket-core/types"
