@@ -270,7 +270,7 @@ func execute(r *pocketTypes.Relay, hostedBlockchains *pocketTypes.HostedBlockcha
 	)
 	if er != nil {
 		// metric track
-		node.MetricsWorker.AddServiceMetricErrorFor(r.Proof.Blockchain, address, false, InternalStatusType, "500")
+		node.MetricsWorker.AddServiceMetricErrorFor(r.Proof.Blockchain, address, false, InternalStatusType, fmt.Sprintf("%d", code))
 		return res, pocketTypes.NewHTTPExecutionError(ModuleName, er)
 	}
 

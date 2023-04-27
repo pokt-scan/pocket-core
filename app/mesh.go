@@ -91,9 +91,9 @@ func defaultMeshConfig(dataDir string) MeshConfig {
 		DataDir: dataDir,
 		RPCPort: sdk.DefaultRPCPort,
 		// following values are to be able to handle very big response from blockchains.
-		ClientRPCTimeout:       120000,
-		ClientRPCReadTimeout:   60000,
-		ClientRPCWriteTimeout:  90000,
+		ClientRPCTimeout:       30000,
+		ClientRPCReadTimeout:   15000,
+		ClientRPCWriteTimeout:  25000,
 		LogLevel:               "*:error",
 		LogChainRequest:        false,
 		LogChainResponse:       false,
@@ -104,24 +104,24 @@ func defaultMeshConfig(dataDir string) MeshConfig {
 		ChainsName:              sdk.DefaultChainsName,
 		ChainsNameMap:           "",
 		RemoteChainsNameMap:     "",
-		ChainRPCTimeout:         80000,
-		ChainRPCReadTimeout:     45000,
-		ChainRPCWriteTimeout:    60000,
+		ChainRPCTimeout:         25000,
+		ChainRPCReadTimeout:     15000,
+		ChainRPCWriteTimeout:    20000,
 		ChainRPCMaxConnsPerHost: 10000,
 		ChainDropConnections:    false,
 		ChainRequestPathCleanup: false,
 		// Relay Cache
 		RelayCacheFile:                         "data" + FS + "relays.pkt",
-		RelayCacheBackgroundSyncInterval:       3600,
-		RelayCacheBackgroundCompactionInterval: 18000,
+		RelayCacheBackgroundSyncInterval:       -1,
+		RelayCacheBackgroundCompactionInterval: 180000,
 		// Hot Reload
 		KeysHotReloadInterval:   180000,
 		ChainsHotReloadInterval: 180000,
 		// Servicer
 		ServicerPrivateKeyFile:     "key" + FS + "key.json",
 		ServicerRPCTimeout:         60000,
-		ServicerRPCReadTimeout:     60000,
-		ServicerRPCWriteTimeout:    60000,
+		ServicerRPCReadTimeout:     15000,
+		ServicerRPCWriteTimeout:    50000,
 		ServicerRPCMaxConnsPerHost: 10000,
 		ServicerAuthTokenFile:      "auth" + FS + "servicer.json",
 		ServicerRetryMaxTimes:      10,
@@ -132,9 +132,9 @@ func defaultMeshConfig(dataDir string) MeshConfig {
 		ServicerMaxWorkersCapacity: 50000,
 		ServicerWorkersIdleTimeout: 10000,
 		// Node Check
-		NodeCheckInterval: 60,
+		NodeCheckInterval: 30,
 		// Session cache (in-memory) clean up interval (seconds)
-		SessionCacheCleanUpInterval: 1800,
+		SessionCacheCleanUpInterval: 120,
 		// Metrics
 		// Prometheus
 		PrometheusAddr:             sdk.DefaultPocketPrometheusListenAddr,
