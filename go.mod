@@ -5,9 +5,12 @@ go 1.18
 require (
 	github.com/akrylysov/pogreb v0.10.1
 	github.com/alitto/pond v1.8.3
+	github.com/ansrivas/fiberprometheus/v2 v2.6.0
 	github.com/cucumber/godog v0.12.6
 	github.com/deckarep/golang-set/v2 v2.3.0
 	github.com/go-kit/kit v0.12.0
+	github.com/goccy/go-json v0.10.2
+	github.com/gofiber/fiber/v2 v2.44.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-retryablehttp v0.7.1
@@ -15,7 +18,7 @@ require (
 	github.com/jordanorelli/lexnum v0.0.0-20141216151731-460eeb125754
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.11.1
+	github.com/prometheus/client_golang v1.14.0
 	github.com/puzpuzpuz/xsync v1.5.2
 	github.com/regen-network/cosmos-proto v0.3.0
 	github.com/robfig/cron/v3 v3.0.1
@@ -25,10 +28,11 @@ require (
 	github.com/tendermint/go-amino v0.15.1
 	github.com/tendermint/tendermint v0.33.7
 	github.com/tendermint/tm-db v0.5.1
+	github.com/valyala/fasthttp v1.45.0
 	github.com/willf/bloom v2.0.3+incompatible
 	github.com/xeipuuv/gojsonschema v1.2.0
-	golang.org/x/crypto v0.0.0-20210915214749-c084706c2272
-	google.golang.org/protobuf v1.27.1
+	golang.org/x/crypto v0.7.0
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/h2non/gock.v1 v1.1.2
 	gopkg.in/yaml.v2 v2.4.0
 )
@@ -36,6 +40,7 @@ require (
 require (
 	github.com/ChainSafe/go-schnorrkel v0.0.0-20200405005733-88cbf1b4c40d // indirect
 	github.com/Workiva/go-datastructures v1.0.52 // indirect
+	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.20.1-beta // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -45,10 +50,11 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-kit/log v0.2.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
+	github.com/gofiber/adaptor/v2 v2.1.31 // indirect
 	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/btree v1.0.0 // indirect
-	github.com/google/go-cmp v0.5.6 // indirect
+	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/gtank/merlin v0.1.1 // indirect
 	github.com/gtank/ristretto255 v0.1.2 // indirect
@@ -58,31 +64,42 @@ require (
 	github.com/hashicorp/go-memdb v1.3.2 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmhodges/levigo v1.0.0 // indirect
+	github.com/klauspost/compress v1.16.3 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/libp2p/go-buffer-pool v0.0.2 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.18 // indirect
+	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20181016162300-f8f6d4d2b643 // indirect
 	github.com/minio/highwayhash v1.0.2 // indirect
 	github.com/onsi/ginkgo v1.16.2 // indirect
 	github.com/onsi/gomega v1.13.0 // indirect
+	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.2.0 // indirect
-	github.com/prometheus/common v0.30.0 // indirect
-	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/prometheus/client_model v0.3.0 // indirect
+	github.com/prometheus/common v0.37.0 // indirect
+	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rs/cors v1.7.0 // indirect
+	github.com/savsgio/dictpool v0.0.0-20221023140959-7bf2e61cea94 // indirect
+	github.com/savsgio/gotils v0.0.0-20230208104028-c358bd845dee // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.1.1 // indirect
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c // indirect
+	github.com/tinylib/msgp v1.1.8 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/tcplisten v1.0.0 // indirect
 	github.com/willf/bitset v1.1.10 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
-	golang.org/x/net v0.0.0-20210917221730-978cfadd31cf // indirect
-	golang.org/x/sys v0.0.0-20210917161153-d61c044b1678 // indirect
-	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/sys v0.7.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	google.golang.org/genproto v0.0.0-20210917145530-b395a37504d4 // indirect
 	google.golang.org/grpc v1.40.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

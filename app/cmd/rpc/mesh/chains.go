@@ -1,20 +1,20 @@
 package mesh
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/pokt-network/pocket-core/app"
 	nodesTypes "github.com/pokt-network/pocket-core/x/nodes/types"
 	pocketTypes "github.com/pokt-network/pocket-core/x/pocketcore/types"
 	"github.com/puzpuzpuz/xsync"
+	"github.com/valyala/fasthttp"
 	"github.com/xeipuuv/gojsonschema"
-	"io"
 	"io/ioutil"
 	log2 "log"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -49,44 +49,33 @@ func loadLocalChainsNameMap() ([]byte, error) {
 
 // loadRemoteChainsNameMap - load remote chain name map
 func loadRemoteChainsNameMap() ([]byte, error) {
-	req, err := http.NewRequest("GET", app.GlobalMeshConfig.RemoteChainsNameMap, nil)
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(app.GlobalMeshConfig.RemoteChainsNameMap)
+	req.Header.SetMethod(fasthttp.MethodGet)
 	req.Header.Set("Content-Type", "application/json")
 	if app.GlobalMeshConfig.UserAgent != "" {
 		req.Header.Set("User-Agent", app.GlobalMeshConfig.UserAgent)
 	}
-	resp, err := chainsClient.Do(req)
-
+	resp := fasthttp.AcquireResponse()
+	err := chainsClient.Do(req, resp)
+	fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
 	if err != nil {
 		return []byte{}, err
 	}
 
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			logger.Error(err.Error())
-			return
-		}
-	}(resp.Body)
-
-	// read the body just to allow http 1.x be able to reuse the connection
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		e := errors.New(fmt.Sprintf("Couldn't parse response body. Error: %s", err.Error()))
-		return []byte{}, e
-	}
-
-	isSuccess := resp.StatusCode == 200
+	isSuccess := resp.StatusCode() == http.StatusOK
 
 	if !isSuccess {
 		return []byte{}, errors.New(
 			fmt.Sprintf(
 				"error=StatusCode != 200 code=%d",
-				resp.StatusCode,
+				resp.StatusCode(),
 			),
 		)
 	}
 
-	return body, nil
+	return resp.Body(), nil
 }
 
 // loadChainsNameMap - load chain name map from local or remote depending on config.json file
@@ -327,6 +316,34 @@ func initChainsHotReload() {
 	}
 }
 
+func httpConnError(err error) (string, bool, int) {
+	var (
+		errName string
+		known   = true
+		code    = 500
+	)
+
+	switch {
+	case errors.Is(err, fasthttp.ErrTimeout):
+		errName = "timeout"
+		code = 504
+	case errors.Is(err, fasthttp.ErrTimeout):
+		errName = "conn_limit"
+		code = 503
+	case errors.Is(err, fasthttp.ErrConnectionClosed):
+		errName = "conn_close"
+		code = 503
+	case reflect.TypeOf(err).String() == "*net.OpError":
+		errName = "timeout"
+		code = 504
+	default:
+		known = false
+		code = 500
+	}
+
+	return errName, known, code
+}
+
 // ExecuteBlockchainHTTPRequest - run the non-native blockchain http request reusing chains http client.
 func ExecuteBlockchainHTTPRequest(payload, url, userAgent string, basicAuth pocketTypes.BasicAuth, method string, headers map[string]string) (string, error, int) {
 	var m string
@@ -345,52 +362,55 @@ func ExecuteBlockchainHTTPRequest(payload, url, userAgent string, basicAuth pock
 		}, url)
 	}
 
-	// generate an http request
-	req, err := http.NewRequest(m, url, bytes.NewBuffer([]byte(payload)))
-	if err != nil {
-		return "", err, 500
-	}
+	// per-request timeout
+	reqTimeout := time.Duration(app.GlobalMeshConfig.ChainRPCTimeout) * time.Millisecond
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(url)
+	req.Header.SetMethod(m)
 	if basicAuth.Username != "" {
-		req.SetBasicAuth(basicAuth.Username, basicAuth.Password)
+		req.URI().SetUsername(basicAuth.Username)
+		req.URI().SetPassword(basicAuth.Password)
 	}
 	if userAgent != "" {
 		req.Header.Set("User-Agent", userAgent)
 	}
 	// add headers if needed
 	if len(headers) == 0 {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.SetContentType("application/json")
 	} else {
 		for k, v := range headers {
 			req.Header.Set(k, v)
 		}
 	}
-
 	// some users report lots of EOF due to connections trying to behind reused but net.Http fails to understand it.
 	if app.GlobalMeshConfig.ChainDropConnections {
 		req.Header.Set("Connection", "close")
-		req.Close = true
 	}
+	req.SetBodyRaw([]byte(payload))
 
-	// execute the request
-	resp, err := chainsClient.Do(req)
+	resp := fasthttp.AcquireResponse()
+	err := chainsClient.DoTimeout(req, resp, reqTimeout)
+	fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
 	if err != nil {
-		return "", err, 500
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
+		errName, known, code := httpConnError(err)
+		if known {
+			logger.Error("conn error", "err", errName)
+		} else {
+			logger.Error("conn failure", "err", errName, err)
 		}
-	}(resp.Body)
-	// read all bz
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err, 500
+
+		return "", err, code
 	}
+
+	statusCode := resp.StatusCode()
+	body := resp.Body()
+
 	if app.GlobalMeshConfig.JSONSortRelayResponses {
 		body = []byte(sortJSONResponse(string(body)))
 	}
-
+	//
 	logStr := fmt.Sprintf("executing blockchain request:\nURL=%s\nMETHOD=%s\nSTATUS=%d\n", url, m, resp.StatusCode)
 
 	if app.GlobalMeshConfig.LogChainRequest {
@@ -401,13 +421,13 @@ func ExecuteBlockchainHTTPRequest(payload, url, userAgent string, basicAuth pock
 		logStr = logStr + fmt.Sprintf("RES=%s\n", string(body))
 	}
 
-	if resp.StatusCode >= 400 {
+	if statusCode >= 400 {
 		logger.Error(logStr)
 	} else {
 		logger.Debug(logStr)
 	}
 
-	return string(body), nil, resp.StatusCode
+	return string(body), nil, statusCode
 }
 
 // GetChains - return current chains list.

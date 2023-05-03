@@ -2,17 +2,25 @@ package mesh
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/akrylysov/pogreb"
+	"github.com/ansrivas/fiberprometheus/v2"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/goccy/go-json"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/timeout"
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/julienschmidt/httprouter"
 	"github.com/pokt-network/pocket-core/app"
 	sdk "github.com/pokt-network/pocket-core/types"
 	pocketTypes "github.com/pokt-network/pocket-core/x/pocketcore/types"
 	"github.com/puzpuzpuz/xsync"
 	"github.com/robfig/cron/v3"
 	"github.com/tendermint/tendermint/libs/log"
+	"github.com/valyala/fasthttp"
 	log2 "log"
 	"math/rand"
 	"net/http"
@@ -26,15 +34,16 @@ const (
 	ServicerRelayEndpoint   = "/v1/private/mesh/relay"
 	ServicerSessionEndpoint = "/v1/private/mesh/session"
 	ServicerCheckEndpoint   = "/v1/private/mesh/check"
-	AppVersion              = "RC-0.3.0"
+	AppVersion              = "BETA-0.4.0-fiber"
 )
 
 var (
-	srv               *http.Server
+	fiberApp *fiber.App
+	//srv               *http.Server
 	finish            context.CancelFunc
 	logger            log.Logger
-	chainsClient      *http.Client
-	servicerClient    *http.Client
+	chainsClient      *fasthttp.Client
+	servicerClient    *fasthttp.Client
 	relaysClient      *retryablehttp.Client
 	relaysCacheDb     *pogreb.DB
 	servicerMap       = xsync.NewMapOf[*servicer]()
@@ -97,8 +106,8 @@ var invalidCodes = []sdk.CodeType{
 func StopRPC() {
 	// stop receiving new requests
 	logger.Info("stopping http server...")
-	if srv != nil {
-		if err := srv.Shutdown(context.Background()); err != nil {
+	if fiberApp.Server() != nil {
+		if err := fiberApp.ShutdownWithContext(context.Background()); err != nil {
 			logger.Error(fmt.Sprintf("http server shutdown error: %s", err.Error()))
 		}
 	}
@@ -129,7 +138,65 @@ func StopRPC() {
 }
 
 // StartRPC - Start mesh rpc server
-func StartRPC(router *httprouter.Router) {
+func StartRPC(routes Routes) {
+	fiberApp = fiber.New(fiber.Config{
+		ServerHeader:  "Geo-Mesh",
+		AppName:       AppVersion,
+		Prefork:       false,
+		CaseSensitive: true,
+		StrictRouting: true,
+		JSONEncoder:   json.Marshal,
+		JSONDecoder:   json.Unmarshal,
+		ReadTimeout:   time.Duration(app.GlobalMeshConfig.ClientRPCReadTimeout) * time.Millisecond,
+		WriteTimeout:  time.Duration(app.GlobalMeshConfig.ClientRPCWriteTimeout) * time.Millisecond,
+	})
+
+	// load middlewares
+	fiberApp.Use(recover.New())
+	// only allow application/json content
+	fiberApp.Use(func(c *fiber.Ctx) error {
+		c.Accepts("application/json")
+		return c.Next()
+	})
+
+	labels := map[string]string{
+		InstanceMoniker: app.GlobalMeshConfig.MetricsMoniker,
+		StatTypeLabel:   "server",
+	}
+	fiberPrometheus := fiberprometheus.NewWithLabels(labels, ModuleName, ServiceMetricsNamespace)
+	fiberPrometheus.RegisterAt(fiberApp, "/metrics")
+	fiberApp.Use(fiberPrometheus.Middleware)
+
+	fiberApp.Use(compress.New(compress.Config{
+		Level: compress.LevelBestSpeed, // 1
+	}))
+	fiberApp.Use(cors.New())
+
+	// inject routes to fiber app
+	for i := range routes {
+		route := &routes[i]
+		if route.Auth {
+			// load is authorized middleware
+			fiberApp.Use(route.Path, IsAuthorized)
+		}
+
+		fiberApp.Add(
+			route.Method,
+			route.Path,
+			timeout.NewWithContext(
+				route.HandlerFunc,
+				time.Duration(app.GlobalMeshConfig.ClientRPCTimeout)*time.Millisecond,
+				errors.New(
+					fmt.Sprintf(
+						"request to %s timeout after %d ms",
+						route.Path,
+						app.GlobalMeshConfig.ClientRPCTimeout,
+					),
+				),
+			),
+		)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	finish = cancel
 	defer cancel()
@@ -159,31 +226,30 @@ func StartRPC(router *httprouter.Router) {
 	// bootstrap cache
 	initCache()
 
-	srv = &http.Server{
-		ReadTimeout:       time.Duration(app.GlobalMeshConfig.ClientRPCReadTimeout) * time.Millisecond,
-		ReadHeaderTimeout: time.Duration(app.GlobalMeshConfig.ClientRPCReadHeaderTimeout) * time.Millisecond,
-		WriteTimeout:      time.Duration(app.GlobalMeshConfig.ClientRPCWriteTimeout) * time.Millisecond,
-		Addr:              ":" + app.GlobalMeshConfig.RPCPort,
-		Handler: http.TimeoutHandler(
-			router,
-			time.Duration(app.GlobalMeshConfig.ClientRPCTimeout)*time.Millisecond,
-			"server Timeout Handling Request",
-		),
-	}
+	//srv = &http.Server{
+	//	ReadTimeout:       time.Duration(app.GlobalMeshConfig.ClientRPCReadTimeout) * time.Millisecond,
+	//	ReadHeaderTimeout: time.Duration(app.GlobalMeshConfig.ClientRPCReadHeaderTimeout) * time.Millisecond,
+	//	WriteTimeout:      time.Duration(app.GlobalMeshConfig.ClientRPCWriteTimeout) * time.Millisecond,
+	//	Addr:              ":" + app.GlobalMeshConfig.RPCPort,
+	//	Handler: http.TimeoutHandler(
+	//		router,
+	//		time.Duration(app.GlobalMeshConfig.ClientRPCTimeout)*time.Millisecond,
+	//		"server Timeout Handling Request",
+	//	),
+	//}
 
 	go catchSignal()
 
 	logger.Info(
 		fmt.Sprintf(
-			"start serving relay as mesh node on http://0.0.0.0:%s for %d servicer in %d nodes",
-			app.GlobalMeshConfig.RPCPort,
+			"start mesh for %d servicer in %d nodes",
 			totalServicers,
 			totalNodes,
 		),
 	)
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := fiberApp.Listen(":" + app.GlobalMeshConfig.RPCPort); err != nil && err != http.ErrServerClosed {
 			log2.Fatal(err)
 		}
 	}()

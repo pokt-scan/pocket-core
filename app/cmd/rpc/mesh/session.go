@@ -1,16 +1,14 @@
 package mesh
 
 import (
-	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
+	"github.com/goccy/go-json"
 	"github.com/pokt-network/pocket-core/app"
 	sdk "github.com/pokt-network/pocket-core/types"
 	pocketTypes "github.com/pokt-network/pocket-core/x/pocketcore/types"
 	"github.com/robfig/cron/v3"
-	"io"
-	"io/ioutil"
+	"github.com/valyala/fasthttp"
 	log2 "log"
 	"net/http"
 	"time"
@@ -123,37 +121,33 @@ func getAppSession(relay *pocketTypes.Relay, model interface{}) *SdkErrorRespons
 		servicerNode.Node.URL,
 		ServicerSessionEndpoint,
 	)
-	req, e := http.NewRequest("POST", requestURL, bytes.NewBuffer(jsonData))
-	req.Header.Set(AuthorizationHeader, servicerAuthToken.Value)
-	if e != nil {
-		return NewSdkErrorFromPocketSdkError(sdk.ErrInternal(e.Error()))
-	}
 
-	req.Header.Set("Content-Type", "application/json")
+	// per-request timeout
+	reqTimeout := time.Duration(app.GlobalMeshConfig.ServicerRPCTimeout) * time.Millisecond
+	req := fasthttp.AcquireRequest()
+	req.SetRequestURI(requestURL)
+	req.Header.SetMethod(fasthttp.MethodPost)
+	req.Header.SetContentType("application/json")
+	req.Header.Set(AuthorizationHeader, servicerAuthToken.Value)
 	if app.GlobalMeshConfig.UserAgent != "" {
 		req.Header.Set("User-Agent", app.GlobalMeshConfig.UserAgent)
 	}
+	req.SetBodyRaw(jsonData)
 
-	resp, e := servicerClient.Do(req)
-	if e != nil {
+	resp := fasthttp.AcquireResponse()
+	err := servicerClient.DoTimeout(req, resp, reqTimeout)
+	fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	if err != nil {
 		return NewSdkErrorFromPocketSdkError(sdk.ErrInternal(e.Error()))
 	}
-
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			return // add log here
-		}
-	}(resp.Body)
-
-	// read the body just to allow http 1.x be able to reuse the connection
-	body, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
 		return NewSdkErrorFromPocketSdkError(sdk.ErrInternal(err.Error()))
 	}
 
-	if resp.StatusCode == 401 {
+	if resp.StatusCode() == http.StatusUnauthorized {
 		return NewSdkErrorFromPocketSdkError(
 			sdk.ErrUnauthorized(
 				fmt.Sprintf("wrong auth form %s", ServicerSessionEndpoint),
@@ -161,17 +155,17 @@ func getAppSession(relay *pocketTypes.Relay, model interface{}) *SdkErrorRespons
 		)
 	}
 
-	isSuccess := resp.StatusCode == 200
+	isSuccess := resp.StatusCode() == http.StatusOK
 
 	if !isSuccess {
 		result := RPCSessionResult{}
-		e = json.Unmarshal(body, &result)
+		e = json.Unmarshal(resp.Body(), &result)
 		if e != nil {
 			return NewSdkErrorFromPocketSdkError(sdk.ErrInternal(e.Error()))
 		}
 		return nil
 	} else {
-		e = json.Unmarshal(body, model)
+		e = json.Unmarshal(resp.Body(), model)
 		if e != nil {
 			return NewSdkErrorFromPocketSdkError(sdk.ErrInternal(e.Error()))
 		}
