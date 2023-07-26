@@ -85,10 +85,13 @@ var (
 // 	CodeInvalidNodePubKeyError           = 34
 // 	CodeUnsupportedBlockchainAppError    = 13
 var invalidSessionCode = []sdk.CodeType{
-	pocketTypes.CodeAppNotFoundError,
+
 	pocketTypes.CodeEvidenceSealed,
 	pocketTypes.CodeOverServiceError,
 	pocketTypes.CodeOutOfSyncRequestError,
+
+	// The  below following errors are returned whenever a session is validated (handleMeshSession / session.Validate)
+	pocketTypes.CodeAppNotFoundError,
 	pocketTypes.CodeUnsupportedBlockchainError,
 	pocketTypes.CodeUnsupportedBlockchainAppError,
 	pocketTypes.CodeInsufficientNodesError,
