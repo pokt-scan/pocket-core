@@ -86,11 +86,14 @@ var (
 // 	CodeUnsupportedBlockchainAppError    = 13
 var invalidSessionCode = []sdk.CodeType{
 
+	// Can happen on session rollover and full node already submitted claim
 	pocketTypes.CodeEvidenceSealed,
 	pocketTypes.CodeOverServiceError,
+
+	// Can happen if dispatcher or full node is too out of sync.
 	pocketTypes.CodeOutOfSyncRequestError,
 
-	// The  below following errors are returned whenever a session is validated (handleMeshSession / session.Validate)
+	// The below following errors are returned whenever a session is validated (handleMeshSession / session.Validate)
 	pocketTypes.CodeAppNotFoundError,
 	pocketTypes.CodeUnsupportedBlockchainError,
 	pocketTypes.CodeUnsupportedBlockchainAppError,
