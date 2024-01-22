@@ -1,16 +1,20 @@
 #!/usr/bin/expect
 
+# Command to run
+set command $argv
+set timeout -1
+
 # Send `pocket stop` when interrupted to prevent corruption
 proc graceful_exit {} {
     send_user "Gracefully exiting Pocket...\n"
     spawn sh -c "pocket stop"
 }
 
-trap graceful_exit {SIGINT SIGTERM}
+proc graceful_mesh_exit {pid} {
+    send_user "Gracefully exiting Pocket...\n"
+    exec kill -SIGTERM $pid
+}
 
-# Command to run
-set command $argv
-set timeout -1
 
 # Pull variables from env if set
 set defaultDatadir "/home/app/.pocket"
@@ -109,5 +113,11 @@ if {[regexp -nocase "keybase=false" $command]} {
     spawn sh -c "$command"
 }
 
+set pid [exp_pid]
+if {![regexp -nocase "start-mesh" $command]} {
+  trap graceful_exit {SIGINT SIGTERM}
+} else {
+  trap "graceful_mesh_exit $pid" {SIGINT SIGTERM}
+}
 expect eof
 exit
