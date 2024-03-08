@@ -228,9 +228,9 @@ func notifyServicer(r *pocketTypes.Relay) {
 	} else {
 		LogRelay(r, "notify - servicer processed relay successfully", LogLvlDebug)
 
-		exhausted := ns.CountRelay()
+		canHoldMore := ns.CountRelay()
 
-		if exhausted {
+		if !canHoldMore {
 			LogRelay(r, "notify - servicer exhaust relays", LogLvlDebug)
 		} else {
 			LogRelay(r, fmt.Sprintf("notify - servicer has %d remaining relays", ns.RemainingRelays), LogLvlDebug)
