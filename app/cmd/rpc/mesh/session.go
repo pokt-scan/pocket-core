@@ -197,7 +197,6 @@ func (ns *NodeSession) ValidateSessionTask() func() {
 			return
 		}
 
-		ns.Log("session queried done", LogLvlInfo)
 		if isSuccess {
 			// dispatch response about session - across nodes
 			ns.Dispatch = result.Dispatch
@@ -222,6 +221,7 @@ func (ns *NodeSession) ValidateSessionTask() func() {
 
 		ns.Queue = false
 		ns.Queried = true
+		ns.Log("session queried done", LogLvlInfo)
 	}
 }
 

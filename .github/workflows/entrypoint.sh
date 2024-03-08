@@ -15,47 +15,11 @@ proc graceful_mesh_exit {pid} {
     exec kill -SIGTERM $pid
 }
 
-
 # Pull variables from env if set
 set defaultDatadir "/home/app/.pocket"
 set datadir $defaultDatadir
 catch {set datadir $env(POCKET_CORE_DATADIR)}
 set datadirParam "--datadir=${datadir}"
-
-set genesis ""
-catch {set genesis $env(POCKET_CORE_GENESIS)}
-
-set chains ""
-catch {set chains $env(POCKET_CORE_CHAINS)}
-
-set config ""
-catch {set config $env(POCKET_CORE_CONFIG)}
-
-set core_key ""
-catch {set core_key $env(POCKET_CORE_KEY)}
-
-set core_passphrase ""
-catch {set core_passphrase $env(POCKET_CORE_PASSPHRASE)}
-
-# Create dynamic config files
-if {$genesis != ""} {
-    set genesis_file [open "{$datadir}/config/genesis.json" w]
-    puts $genesis_file $genesis
-    close $genesis_file
-    send_user "GENESIS loaded from env\n"
-}
-if {$chains != ""} {
-    set chains_file [open "${datadir}/config/chains.json" w]
-    puts $chains_file $chains
-    close $chains_file
-    send_user "CHAINS loaded from env\n"
-}
-if {$config != ""} {
-    set config_file [open "${datadir}/config/config.json" w]
-    puts $config_file $config
-    close $config_file
-    send_user "CONFIG loaded from env\n"
-}
 
 if {[regexp -nocase "datadir=" $command] && ![regexp -nocase "datadir=${datadir}" $command]} {
   send_user "WARNING: --datadir provided with a different path to the one defined on Dockerfile. This could lead to errors when use this entrypoint to run CLI commands.\n"
@@ -65,7 +29,7 @@ if {[regexp -nocase "datadir=" $command] && ![regexp -nocase "datadir=${datadir}
 }
 
 if {![regexp -nocase "datadir=${defaultDatadir}" $command]} {
-	send_user "WARNING: --datadir is not the default one
+  send_user "WARNING: --datadir is not the default one
 Please review:
 1. Mount your config folder to the same path you specify on --datadir
 2. Review your config.json on the following points to match with the value of --datadir
@@ -78,19 +42,67 @@ Please review:
 "
 }
 
-# if not --keybase=false
-# e.g. "pocket start --keybase=false --mainnet --datadir=/home/app/.pocket/"
-if {[regexp -nocase "keybase=false" $command]} {
-	spawn sh -c "$command"
-} elseif { $core_key eq "" }  {
-	  # If key isn't passed in, start the node
-    log_user 0
+proc check_passphrase {str} {
+  send_user "checking passphrase: ${str}\n"
+  if {$str == ""} {
+    send_user "missing POCKET_CORE_PASSPHRASE environment variable"
+    exit 1
+  }
+}
+
+set pid [exp_pid]
+if {![regexp -nocase "start-mesh" $command]} {
+  send_user "starting pocket servicer\n"
+  set genesis ""
+  catch {set genesis $env(POCKET_CORE_GENESIS)}
+
+  set chains ""
+  catch {set chains $env(POCKET_CORE_CHAINS)}
+
+  set config ""
+  catch {set config $env(POCKET_CORE_CONFIG)}
+
+  set core_key ""
+  catch {set core_key $env(POCKET_CORE_KEY)}
+
+  set core_passphrase ""
+  catch {set core_passphrase $env(POCKET_CORE_PASSPHRASE)}
+
+  # Create dynamic config files
+  if {$genesis != ""} {
+      set genesis_file [open "{$datadir}/config/genesis.json" w]
+      puts $genesis_file $genesis
+      close $genesis_file
+      send_user "GENESIS loaded from env\n"
+  }
+  if {$chains != ""} {
+      set chains_file [open "${datadir}/config/chains.json" w]
+      puts $chains_file $chains
+      close $chains_file
+      send_user "CHAINS loaded from env\n"
+  }
+  if {$config != ""} {
+      set config_file [open "${datadir}/config/config.json" w]
+      puts $config_file $config
+      close $config_file
+      send_user "CONFIG loaded from env\n"
+  }
+
+  # if not --keybase=false
+  # e.g. "pocket start --keybase=false --mainnet --datadir=/home/app/.pocket/"
+  if {[regexp -nocase "keybase=false" $command]} {
+    spawn sh -c "$command"
+  } elseif { $core_key eq "" }  {
+    # If key isn't passed in, start the node
+    check_passphrase $core_passphrase
+    log_user 1
     spawn sh -c "$command"
     send -- "$core_passphrase\n"
     log_user 1
-} else {
+  } else {
+    check_passphrase $core_passphrase
     # If key is passed in, load it into the local accounts
-    log_user 0
+    log_user 1
     spawn pocket accounts import-raw $datadirParam $core_key
     sleep 1
     send -- "$core_passphrase\n"
@@ -101,13 +113,13 @@ if {[regexp -nocase "keybase=false" $command]} {
     expect eof
     log_user 1
     spawn sh -c "$command"
-}
-
-set pid [exp_pid]
-if {![regexp -nocase "start-mesh" $command]} {
+  }
   trap graceful_exit {SIGINT SIGTERM}
 } else {
+  send_user "starting geo-mesh client\n"
+  spawn sh -c "$command"
   trap "graceful_mesh_exit $pid" {SIGINT SIGTERM}
 }
+
 expect eof
 exit
