@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/pokt-network/pocket-core/types"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/pprof"
@@ -251,7 +250,7 @@ type rpcError struct {
 }
 
 func PopModel(_ http.ResponseWriter, r *http.Request, _ httprouter.Params, model interface{}) error {
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
 	}
