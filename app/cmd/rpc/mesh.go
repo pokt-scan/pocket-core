@@ -544,7 +544,7 @@ func getMeshRoutes(simulation bool) Routes {
 		Route{Name: "QueryUnconfirmedTxs", Method: "POST", Path: "/v1/query/unconfirmedtxs", HandlerFunc: mesh.ProxyRequest},
 		Route{Name: "QueryUnconfirmedTx", Method: "POST", Path: "/v1/query/unconfirmedtx", HandlerFunc: mesh.ProxyRequest},
 		// mesh public route to handle relays
-		Route{Name: "MeshService", Method: "POST", Path: "/v1/client/relay", HandlerFunc: reuseBody(meshNodeRelay)},
+		Route{Name: "MeshService", Method: "POST", Path: "/v1/client/relay", HandlerFunc: meshNodeRelay},
 		// mesh private routes
 		Route{Name: "MeshHealth", Method: "GET", Path: "/v1/private/mesh/health", HandlerFunc: meshHealth},
 		Route{Name: "QueryMeshNodeChains", Method: "POST", Path: "/v1/private/mesh/chains", HandlerFunc: meshChains},
@@ -585,6 +585,6 @@ func GetServicerMeshRoutes() Routes {
 }
 
 // StartMeshRPC - encapsulate mesh.StartRPC
-func StartMeshRPC(simulation bool) {
-	mesh.StartRPC(Router(getMeshRoutes(simulation)))
+func StartMeshRPC(simulation bool, clientRpcMaxBytes int64) {
+	mesh.StartRPC(Router(getMeshRoutes(simulation), clientRpcMaxBytes))
 }

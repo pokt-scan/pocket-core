@@ -98,7 +98,7 @@ func start(cmd *cobra.Command, args []string) {
 		genesisType = app.TestnetGenesisType
 	}
 	tmNode := app.InitApp(datadir, tmNode, persistentPeers, seeds, remoteCLIURL, keybase, genesisType, useCache, forceSetValidatorsLean)
-	go rpc.StartRPC(app.GlobalConfig.PocketConfig.RPCPort, app.GlobalConfig.PocketConfig.RPCTimeout, simulateRelay, profileApp, allBlockTxs, app.GlobalConfig.PocketConfig.ChainsHotReload, app.GlobalConfig.PocketConfig.MeshNode)
+	go rpc.StartRPC(app.GlobalConfig.PocketConfig.RPCPort, app.GlobalConfig.PocketConfig.RPCTimeout, app.GlobalConfig.PocketConfig.RPCMaxBytesSize, simulateRelay, profileApp, allBlockTxs, app.GlobalConfig.PocketConfig.ChainsHotReload, app.GlobalConfig.PocketConfig.MeshNode)
 	// trap kill signals (2,3,15,9)
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel,
@@ -139,7 +139,7 @@ var meshCmd = &cobra.Command{
 
 func startMesh(cmd *cobra.Command, args []string) {
 	app.InitMeshConfig(datadir)
-	rpc.StartMeshRPC(simulateRelay)
+	rpc.StartMeshRPC(simulateRelay, app.GlobalMeshConfig.ClientRPCMaxBytesSize)
 }
 
 // resetCmd represents the reset command

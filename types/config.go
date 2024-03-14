@@ -33,7 +33,7 @@ type PocketConfig struct {
 	KeybaseName                string         `json:"keybase_name"`
 	RPCPort                    string         `json:"rpc_port"`
 	ClientBlockSyncAllowance   int            `json:"client_block_sync_allowance"`
-	ClientSessionSyncAllowance int64  `json:"client_session_sync_allowance"`
+	ClientSessionSyncAllowance int64          `json:"client_session_sync_allowance"`
 	MaxEvidenceCacheEntires    int            `json:"max_evidence_cache_entries"`
 	MaxSessionCacheEntries     int            `json:"max_session_cache_entries"`
 	JSONSortRelayResponses     bool           `json:"json_sort_relay_responses"`
@@ -42,9 +42,10 @@ type PocketConfig struct {
 	ValidatorCacheSize         int64          `json:"validator_cache_size"`
 	ApplicationCacheSize       int64          `json:"application_cache_size"`
 	RPCTimeout                 int64          `json:"rpc_timeout"`
-	RPCMaxIdleConns           int            `json:"rpc_max_idle_conns"`
-	RPCMaxConnsPerHost        int            `json:"rpc_max_conns_per_host"`
-	RPCMaxIdleConnsPerHost    int            `json:"rpc_max_idle_conns_per_host"`
+	RPCMaxIdleConns            int            `json:"rpc_max_idle_conns"`
+	RPCMaxConnsPerHost         int            `json:"rpc_max_conns_per_host"`
+	RPCMaxIdleConnsPerHost     int            `json:"rpc_max_idle_conns_per_host"`
+	RPCMaxBytesSize            int64          `json:"rpc_max_bytes_size"`
 	PrometheusAddr             string         `json:"pocket_prometheus_port"`
 	PrometheusMaxOpenfiles     int            `json:"prometheus_max_open_files"`
 	MaxClaimAgeForProofRetry   int            `json:"max_claim_age_for_proof_retry"`
@@ -59,9 +60,9 @@ type PocketConfig struct {
 	GenerateTokenOnStart       bool           `json:"generate_token_on_start"`
 	LeanPocket                 bool           `json:"lean_pocket"`
 	LeanPocketUserKeyFileName  string         `json:"lean_pocket_user_key_file"`
-	PreventNegativeRewardClaim bool   `json:"prevent_negative_reward_claim"`
-	MeshNode                  bool           `json:"mesh_node"`
-	EvidenceWorker            EvidenceWorker `json:"evidence_worker"`
+	PreventNegativeRewardClaim bool           `json:"prevent_negative_reward_claim"`
+	MeshNode                   bool           `json:"mesh_node"`
+	EvidenceWorker             EvidenceWorker `json:"evidence_worker"`
 }
 
 func (c PocketConfig) GetLeanPocketUserKeyFilePath() string {
@@ -118,6 +119,7 @@ const (
 	DefaultRPCMaxIdleConns             = 1000
 	DefaultRPCMaxConnsPerHost          = 1000
 	DefaultRPCMaxIdleConnsPerHost      = 1000
+	DefaultRPCMaxBytesSize             = 1 * 1024 * 1024
 	DefaultMaxClaimProofRetryAge       = 32
 	DefaultProofPrevalidation          = false
 	DefaultCtxCacheSize                = 20
@@ -156,9 +158,10 @@ func DefaultConfig(dataDir string) Config {
 			ValidatorCacheSize:         DefaultValidatorCacheSize,
 			ApplicationCacheSize:       DefaultApplicationCacheSize,
 			RPCTimeout:                 DefaultRPCTimeout,
-			RPCMaxIdleConns:           DefaultRPCMaxIdleConns,
-			RPCMaxConnsPerHost:        DefaultRPCMaxConnsPerHost,
-			RPCMaxIdleConnsPerHost:    DefaultRPCMaxIdleConnsPerHost,
+			RPCMaxIdleConns:            DefaultRPCMaxIdleConns,
+			RPCMaxConnsPerHost:         DefaultRPCMaxConnsPerHost,
+			RPCMaxIdleConnsPerHost:     DefaultRPCMaxIdleConnsPerHost,
+			RPCMaxBytesSize:            DefaultRPCMaxBytesSize,
 			PrometheusAddr:             DefaultPocketPrometheusListenAddr,
 			PrometheusMaxOpenfiles:     DefaultPrometheusMaxOpenFile,
 			MaxClaimAgeForProofRetry:   DefaultMaxClaimProofRetryAge,
@@ -172,7 +175,7 @@ func DefaultConfig(dataDir string) Config {
 			GenerateTokenOnStart:       DefaultGenerateTokenOnStart,
 			LeanPocket:                 DefaultLeanPocket,
 			LeanPocketUserKeyFileName:  DefaultLeanPocketUserKeyFileName,
-			MeshNode:                  DefaultMeshNode,
+			MeshNode:                   DefaultMeshNode,
 			EvidenceWorker: EvidenceWorker{
 				MaxCapacity: DefaultEvidenceWorkerMaxCapacity,
 				Strategy:    DefaultEvidenceWorkerStrategy,
