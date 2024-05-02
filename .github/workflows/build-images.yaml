@@ -6,11 +6,8 @@ name: Build and push images
 on:
   workflow_dispatch:
   push:
-    branches: [geo-mesh]
     tags:
       - 'MESH-*'
-  pull_request:
-    branches: [geo-mesh]
 
 jobs:
   build-images:
