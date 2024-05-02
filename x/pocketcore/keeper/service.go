@@ -53,7 +53,7 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay, isMesh bool) (*pc.Relay
 				fmt.Sprintf("could not validate relay for app: %s for chainID: %v on node %s with error: %s",
 					relay.Proof.Token.ApplicationPublicKey,
 					relay.Proof.Blockchain,
-					nodeAddress.String(),
+					servicerNodeAddr.String(),
 					e1.Error(),
 				),
 			)
@@ -72,14 +72,14 @@ func (k Keeper) HandleRelay(ctx sdk.Ctx, relay pc.Relay, isMesh bool) (*pc.Relay
 	}
 	// move this to a worker that will insert this proof in a serie style to avoid memory consumption and relay proof race conditions
 	// https://github.com/pokt-network/pocket-core/issues/1457
-	if evidenceWorker, ok := pc.GlobalEvidenceWorkerMap.Load(nodeAddress.String()); ok {
-		ctx.Logger().Debug(fmt.Sprintf("adding relay to evidence worker for address=%s", nodeAddress.String()))
+	if evidenceWorker, ok := pc.GlobalEvidenceWorkerMap.Load(servicerNodeAddr.String()); ok {
+		ctx.Logger().Debug(fmt.Sprintf("adding relay to evidence worker for address=%s", servicerNodeAddr.String()))
 		evidenceWorker.Submit(func() {
 			// store the proof before execution, because the proof corresponds to the previous relay
 			relay.Proof.Store(maxPossibleRelays, servicerNode.EvidenceStore)
 		})
 	} else {
-		ctx.Logger().Error(fmt.Sprintf("evidence worker not found for address=%s", nodeAddress.String()))
+		ctx.Logger().Error(fmt.Sprintf("evidence worker not found for address=%s", servicerNodeAddr.String()))
 	}
 
 	// store the proof before execution, because the proof corresponds to the previous relay
