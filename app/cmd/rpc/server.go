@@ -3,8 +3,8 @@ package rpc
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/pokt-network/pocket-core/types"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/pprof"
@@ -18,7 +18,7 @@ import (
 
 var APIVersion = app.AppVersion
 
-func StartRPC(port string, timeout int64, simulation, debug, allBlockTxs, hotReloadChains, meshNode bool) {
+func StartRPC(port string, timeout, rpcMaxBytes int64, simulation, debug, allBlockTxs, hotReloadChains, meshNode bool) {
 	routes := GetRoutes()
 	if simulation {
 		simRoute := Route{Name: "SimulateRequest", Method: "POST", Path: "/v1/client/sim", HandlerFunc: SimRequest}
@@ -60,15 +60,43 @@ func StartRPC(port string, timeout int64, simulation, debug, allBlockTxs, hotRel
 		ReadHeaderTimeout: 20 * time.Second,
 		WriteTimeout:      60 * time.Second,
 		Addr:              ":" + port,
-		Handler:           http.TimeoutHandler(Router(routes), time.Duration(timeout)*time.Millisecond, "Server Timeout Handling Request"),
+		Handler:           http.TimeoutHandler(Router(routes, rpcMaxBytes), time.Duration(timeout)*time.Millisecond, "Server Timeout Handling Request"),
 	}
 	log.Fatal(srv.ListenAndServe())
 }
 
-func Router(routes Routes) *httprouter.Router {
+func enforceMaxBytesPayload(handler httprouter.Handle, maxBodySize int64) httprouter.Handle {
+	if maxBodySize == 0 {
+		maxBodySize = types.DefaultRPCMaxBytesSize
+	}
+
+	return reuseBody(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		body := http.MaxBytesReader(w, r.Body, maxBodySize)
+		_, err := io.ReadAll(body)
+		if err != nil {
+			response := rpcError{
+				Code:    http.StatusRequestEntityTooLarge,
+				Message: fmt.Sprintf("Request body too large. Max allowed bytes is: %d", maxBodySize),
+			}
+			j, _ := json.Marshal(response)
+			w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+			http.Error(
+				w,
+				string(j),
+				http.StatusRequestEntityTooLarge,
+			)
+			return
+		}
+
+		// call the handler
+		handler(w, r, p)
+	})
+}
+
+func Router(routes Routes, maxBodySize int64) *httprouter.Router {
 	router := httprouter.New()
 	for _, route := range routes {
-		router.Handle(route.Method, route.Path, route.HandlerFunc)
+		router.Handle(route.Method, route.Path, enforceMaxBytesPayload(route.HandlerFunc, maxBodySize))
 	}
 	return router
 }
@@ -77,7 +105,7 @@ func cors(w *http.ResponseWriter, r *http.Request) (isOptions bool) {
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Methods", "POST")
 	(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-	return ((*r).Method == "OPTIONS")
+	return (*r).Method == "OPTIONS"
 }
 
 type Route struct {
@@ -222,7 +250,7 @@ type rpcError struct {
 }
 
 func PopModel(_ http.ResponseWriter, r *http.Request, _ httprouter.Params, model interface{}) error {
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return err
 	}

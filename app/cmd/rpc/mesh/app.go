@@ -26,7 +26,7 @@ const (
 	ServicerRelayEndpoint   = "/v1/private/mesh/relay"
 	ServicerSessionEndpoint = "/v1/private/mesh/session"
 	ServicerCheckEndpoint   = "/v1/private/mesh/check"
-	AppVersion              = "RC-0.4.2"
+	AppVersion              = "RC-0.5.0"
 )
 
 var (
@@ -48,42 +48,63 @@ var (
 )
 
 // validate payload
+//
 //	modulename: pocketcore CodeEmptyPayloadDataError = 25
+//
 // ensures the block height is within the acceptable range
+//
 //	modulename: pocketcore CodeOutOfSyncRequestError            = 75
+//
 // validate the relay merkleHash = request merkleHash
-// 	modulename: pocketcore CodeRequestHash                      = 74
+//
+//	modulename: pocketcore CodeRequestHash                      = 74
+//
 // ensure the blockchain is supported locally
-// 	CodeUnsupportedBlockchainNodeError   = 26
+//
+//	CodeUnsupportedBlockchainNodeError   = 26
+//
 // ensure session block height == one in the relay proof
-// 	CodeInvalidBlockHeightError          = 60
+//
+//	CodeInvalidBlockHeightError          = 60
+//
 // get the session context
-// 	CodeInternal              CodeType = 1
+//
+//	CodeInternal              CodeType = 1
+//
 // get the application that staked on behalf of the client
-// 	CodeAppNotFoundError                 = 45
+//
+//	CodeAppNotFoundError                 = 45
+//
 // validate unique relay
-// 	CodeEvidenceSealed                   = 90
+//
+//	CodeEvidenceSealed                   = 90
+//
 // get evidence key by proof
-// 	CodeDuplicateProofError              = 37
+//
+//	CodeDuplicateProofError              = 37
+//
 // validate not over service
-// 	CodeOverServiceError                 = 71
+//
+//	CodeOverServiceError                 = 71
+//
 // "ValidateLocal" - Validates the proof object, where the owner of the proof is the local node
-// 	CodeInvalidBlockHeightError          = 60
-// 	CodePublKeyDecodeError               = 6
-// 	CodePubKeySizeError                  = 42
-// 	CodeNewHexDecodeError                = 52
-// 	CodeEmptyBlockHashError              = 23
-// 	CodeInvalidHashLengthError           = 62
-// 	CodeInvalidEntropyError              = 29
-// 	CodeInvalidTokenError                = 4
-// 	CodeSigDecodeError                   = 39
-// 	CodeInvalidSignatureSizeError        = 38
-// 	CodePublKeyDecodeError               = 6
-// 	CodeMsgDecodeError                   = 40
-// 	CodeInvalidSigError                  = 41
-// 	CodeInvalidEntropyError              = 29
-// 	CodeInvalidNodePubKeyError           = 34
-// 	CodeUnsupportedBlockchainAppError    = 13
+//
+//	CodeInvalidBlockHeightError          = 60
+//	CodePublKeyDecodeError               = 6
+//	CodePubKeySizeError                  = 42
+//	CodeNewHexDecodeError                = 52
+//	CodeEmptyBlockHashError              = 23
+//	CodeInvalidHashLengthError           = 62
+//	CodeInvalidEntropyError              = 29
+//	CodeInvalidTokenError                = 4
+//	CodeSigDecodeError                   = 39
+//	CodeInvalidSignatureSizeError        = 38
+//	CodePublKeyDecodeError               = 6
+//	CodeMsgDecodeError                   = 40
+//	CodeInvalidSigError                  = 41
+//	CodeInvalidEntropyError              = 29
+//	CodeInvalidNodePubKeyError           = 34
+//	CodeUnsupportedBlockchainAppError    = 13
 var invalidSessionCode = []sdk.CodeType{
 	pocketTypes.CodeAppNotFoundError,
 	pocketTypes.CodeEvidenceSealed,
