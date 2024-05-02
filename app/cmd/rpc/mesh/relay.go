@@ -228,9 +228,9 @@ func notifyServicer(r *pocketTypes.Relay) {
 	} else {
 		LogRelay(r, "notify - servicer processed relay successfully", LogLvlDebug)
 
-		exhausted := ns.CountRelay()
+		canHoldMore := ns.CountRelay()
 
-		if exhausted {
+		if !canHoldMore {
 			LogRelay(r, "notify - servicer exhaust relays", LogLvlDebug)
 		} else {
 			LogRelay(r, fmt.Sprintf("notify - servicer has %d remaining relays", ns.RemainingRelays), LogLvlDebug)
@@ -362,6 +362,10 @@ func validate(r *pocketTypes.Relay) (*NodeSession, sdk.Error) {
 		return nil, sdk.ErrInternal("failed to find correct servicer PK")
 	} else if r.Proof.SessionBlockHeight <= servicerNode.Node.GetLatestSessionBlockHeight() && !servicerNode.Node.CanHandleRelayWithinTolerance(r.Proof.SessionBlockHeight) {
 		return nil, pocketTypes.NewInvalidBlockHeightError(ModuleName)
+	}
+
+	if basicValidationErr := r.Proof.ValidateBasic(); basicValidationErr != nil {
+		return nil, basicValidationErr
 	}
 
 	ns, e1 := sessionStorage.GetSession(r)

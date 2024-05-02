@@ -20,6 +20,7 @@ type MeshConfig struct {
 	ClientRPCReadTimeout       int64  `json:"client_rpc_read_timeout"`
 	ClientRPCReadHeaderTimeout int64  `json:"client_rpc_read_header_timeout"`
 	ClientRPCWriteTimeout      int64  `json:"client_rpc_write_timeout"`
+	ClientRPCMaxBytesSize      int64  `json:"client_rpc_max_bytes_size"`
 	LogLevel                   string `json:"log_level"`
 	LogRelayRequest            bool   `json:"log_relay_request"`
 	LogChainRequest            bool   `json:"log_chain_request"`
@@ -101,6 +102,7 @@ func DefaultMeshConfig(dataDir string) MeshConfig {
 		ClientRPCReadTimeout:       60000,
 		ClientRPCReadHeaderTimeout: 50000,
 		ClientRPCWriteTimeout:      90000,
+		ClientRPCMaxBytesSize:      sdk.DefaultRPCMaxBytesSize,
 		LogLevel:                   "*:error",
 		LogRelayRequest:            false,
 		LogChainRequest:            false,
