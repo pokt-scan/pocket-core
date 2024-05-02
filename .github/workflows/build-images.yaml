@@ -7,7 +7,8 @@ on:
   workflow_dispatch:
   push:
     branches: [geo-mesh]
-    tags: ['*']
+    tags:
+      - 'MESH-*'
   pull_request:
     branches: [geo-mesh]
 
