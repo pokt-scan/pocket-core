@@ -50,7 +50,12 @@ func (node *fullNode) ShouldAssumeOptimisticSession(dispatcherSessionBlockHeight
 }
 
 func (node *fullNode) CanHandleRelayWithinTolerance(dispatcherSessionBlockHeight int64) bool {
-	return pocketTypes.IsProofSessionHeightWithinTolerance(node.GetLatestSessionBlockHeight(), node.BlocksPerSession, dispatcherSessionBlockHeight, node.ClientSessionSyncAllowance)
+	return pocketTypes.IsProofSessionHeightWithinTolerance(
+		node.GetLatestSessionBlockHeight(),
+		node.BlocksPerSession,
+		dispatcherSessionBlockHeight,
+		node.ClientSessionSyncAllowance,
+	)
 }
 
 // NewWorker - generate a new worker.
