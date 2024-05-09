@@ -15,7 +15,8 @@ RUN apk add --update --no-cache expect bash leveldb-dev tzdata curl \
 
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /build/pocket /bin/pocket
-COPY .github/workflows/entrypoint.sh /home/app/entrypoint.sh
+# mesh will use separated entrypoint to avoid issues when rebase from upstream repository.
+COPY .github/workflows/mesh_entrypoint.sh /home/app/entrypoint.sh
 # allow users to run the container as root and fix the permissions in an easy way
 # this could be used as a one time run entrypoint.
 # e.g:
