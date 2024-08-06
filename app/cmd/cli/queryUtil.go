@@ -6,7 +6,7 @@ import (
 	"fmt"
 	sdk "github.com/pokt-network/pocket-core/types"
 	"github.com/pokt-network/pocket-core/x/pocketcore/types"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -130,7 +130,7 @@ func QueryRPC(path string, jsonArgs []byte) (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
-	bz, err := ioutil.ReadAll(resp.Body)
+	bz, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}
@@ -170,7 +170,7 @@ func QuerySecuredRPC(path string, jsonArgs []byte, token sdk.AuthToken) (string,
 		return "", err
 	}
 	defer resp.Body.Close()
-	bz, err := ioutil.ReadAll(resp.Body)
+	bz, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}

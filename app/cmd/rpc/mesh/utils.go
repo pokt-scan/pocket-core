@@ -10,6 +10,7 @@ import (
 	log2 "log"
 	"math/rand"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -134,7 +135,7 @@ func ServicerIsSupported(address string) error {
 // NewWorkerPool - create pond.WorkerPool instance with the right params in place.
 func NewWorkerPool(name string, strategyName string, maxWorkers, maxCapacity, idleTimeout int) *pond.WorkerPool {
 	panicHandler := func(p interface{}) {
-		logger.Error(fmt.Sprintf("Worker %s task paniced: %v", name, p))
+		logger.Error(fmt.Sprintf("Worker name=%s exits from a panic=%v\nStack trace: %s\n", name, p, string(debug.Stack())))
 	}
 
 	var strategy pond.ResizingStrategy

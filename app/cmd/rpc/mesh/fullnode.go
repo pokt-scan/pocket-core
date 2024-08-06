@@ -12,7 +12,6 @@ import (
 	"github.com/puzpuzpuz/xsync"
 	"github.com/robfig/cron/v3"
 	"io"
-	"io/ioutil"
 	log2 "log"
 	"net/http"
 	"net/url"
@@ -125,7 +124,7 @@ func (node *fullNode) checkNodeEndpoint(endpoint string) error {
 	}(resp.Body)
 
 	// read the body just to allow http 1.x be able to reuse the connection
-	_, err = ioutil.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body)
 	if err != nil {
 		e := errors.New(fmt.Sprintf("Couldn't parse response body. Error: %s", CleanError(err.Error())))
 		return e
@@ -201,7 +200,7 @@ func (node *fullNode) runCheck() error {
 	}(resp.Body)
 
 	// read the body just to allow http 1.x be able to reuse the connection
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
 		return err

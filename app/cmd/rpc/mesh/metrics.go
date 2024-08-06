@@ -28,6 +28,7 @@ var (
 	NotifyLabel               = "is_notify"
 	StatusTypeLabel           = "status_type"
 	StatusCodeLabel           = "status_code"
+	SuccessLabel              = "success"
 	InstanceMoniker           = "moniker"
 
 	runningWorkers                *stdPrometheus.GaugeVec
@@ -60,7 +61,7 @@ type ServiceMetric struct {
 }
 
 func getErrorLabelSignature() []string {
-	baseLabels := []string{InstanceMoniker, ChainIDLabel, ChainNameLabel, NotifyLabel, StatusTypeLabel, StatusCodeLabel}
+	baseLabels := []string{InstanceMoniker, ChainIDLabel, ChainNameLabel, NotifyLabel, StatusTypeLabel, StatusCodeLabel, SuccessLabel}
 	if app.GlobalMeshConfig.MetricsAttachServicerLabel {
 		baseLabels = append(baseLabels, ServicerLabel)
 	}
@@ -68,7 +69,7 @@ func getErrorLabelSignature() []string {
 }
 
 func getLabelSignature() []string {
-	baseLabels := []string{InstanceMoniker, ChainIDLabel, ChainNameLabel, NotifyLabel}
+	baseLabels := []string{InstanceMoniker, ChainIDLabel, ChainNameLabel, NotifyLabel, SuccessLabel, StatusCodeLabel}
 	if app.GlobalMeshConfig.MetricsAttachServicerLabel {
 		baseLabels = append(baseLabels, ServicerLabel)
 	}
@@ -98,12 +99,14 @@ var (
 )
 
 // getLabel - return properly formatted prometheus label
-func getLabel(nodeAddress *sdk.Address, chainID string, notify bool) map[string]string {
+func getLabel(nodeAddress *sdk.Address, chainID string, notify, success bool, statusCode string) map[string]string {
 	labels := map[string]string{
-		// useful to identify different mesh instances against many writing to same prometheus like cross region.
+		// useful to identify different mesh instances against much writing to same prometheus like cross region.
 		InstanceMoniker: app.GlobalMeshConfig.MetricsMoniker,
 		ChainIDLabel:    chainID,
 		NotifyLabel:     fmt.Sprintf("%v", notify),
+		SuccessLabel:    fmt.Sprintf("%v", success),
+		StatusCodeLabel: statusCode,
 	}
 
 	if name, ok := ChainNameMap.Load(chainID); ok {
@@ -121,17 +124,14 @@ func getLabel(nodeAddress *sdk.Address, chainID string, notify bool) map[string]
 }
 
 func getErrorLabel(nodeAddress *sdk.Address, chainID string, notify bool, statusType, statusCode string) map[string]string {
-	labels := getLabel(nodeAddress, chainID, notify)
-
+	labels := getLabel(nodeAddress, chainID, notify, false, statusCode)
 	labels[StatusTypeLabel] = statusType
-	labels[StatusCodeLabel] = statusCode
-
 	return labels
 }
 
 func getChainLabel(chainID string, code int) map[string]string {
 	labels := map[string]string{
-		// useful to identify different mesh instances against many writing to same prometheus like cross region.
+		// useful to identify different mesh instances against much writing to same prometheus like cross-region.
 		InstanceMoniker: app.GlobalMeshConfig.MetricsMoniker,
 		ChainIDLabel:    chainID,
 		StatusCodeLabel: fmt.Sprintf("%d", code),
@@ -180,17 +180,17 @@ func getSessionStorageLabel(nodeAddress string, chainID string, applicationPubKe
 }
 
 // addRelayFor - accumulate a relay on servicer and per chain counters.
-func addRelayFor(chainID string, relayDuration float64, nodeAddress *sdk.Address, notify bool) {
+func addRelayFor(chainID string, relayDuration float64, nodeAddress *sdk.Address, notify, success bool, statusCode string) {
 	// add relay to accumulated count
-	labels := getLabel(nodeAddress, chainID, notify)
+	labels := getLabel(nodeAddress, chainID, notify, success, statusCode)
 	relayCounter.With(labels).Add(1)
 	relayTime.With(labels).Observe(relayDuration)
 }
 
 // addHandlerRelayFor - accumulate a handler relay on servicer and per chain counters. (without chain)
-func addHandlerRelayFor(chainID string, relayDuration float64, nodeAddress *sdk.Address, notify bool) {
+func addHandlerRelayFor(chainID string, relayDuration float64, nodeAddress *sdk.Address, notify, success bool, statusCode string) {
 	// add relay to accumulated count
-	labels := getLabel(nodeAddress, chainID, notify)
+	labels := getLabel(nodeAddress, chainID, notify, success, statusCode)
 	relayHandlerTime.With(labels).Observe(relayDuration)
 }
 
@@ -262,7 +262,7 @@ func (m *Metrics) AddServiceMetricErrorFor(blockchain string, address *sdk.Addre
 }
 
 // AddServiceMetricRelayFor - add to prometheus metrics a relay for a servicer
-func (m *Metrics) AddServiceMetricRelayFor(relay *pocketTypes.Relay, address *sdk.Address, relayTime time.Duration, notify bool) {
+func (m *Metrics) AddServiceMetricRelayFor(relay *pocketTypes.Relay, address *sdk.Address, relayTime time.Duration, notify, success bool, statusCode string) {
 	m.worker.Submit(func() {
 		logger.Debug(fmt.Sprintf("adding metric for relay %s", relay.RequestHashString()))
 		addRelayFor(
@@ -270,12 +270,14 @@ func (m *Metrics) AddServiceMetricRelayFor(relay *pocketTypes.Relay, address *sd
 			float64(relayTime.Milliseconds()),
 			address,
 			notify,
+			success,
+			statusCode,
 		)
 	})
 }
 
 // AddServiceHandlerMetricRelayFor - add metrics of the handler of a relay (without chain execution)
-func (m *Metrics) AddServiceHandlerMetricRelayFor(relay *pocketTypes.Relay, address *sdk.Address, relayTime time.Duration, notify bool) {
+func (m *Metrics) AddServiceHandlerMetricRelayFor(relay *pocketTypes.Relay, address *sdk.Address, relayTime time.Duration, notify, success bool, statusCode string) {
 	m.worker.Submit(func() {
 		logger.Debug(fmt.Sprintf("adding handler metric for relay %s", relay.RequestHashString()))
 		addHandlerRelayFor(
@@ -283,6 +285,8 @@ func (m *Metrics) AddServiceHandlerMetricRelayFor(relay *pocketTypes.Relay, addr
 			float64(relayTime.Milliseconds()),
 			address,
 			notify,
+			success,
+			statusCode,
 		)
 	})
 }
@@ -489,7 +493,7 @@ func RegisterMetrics() {
 		getErrorLabelSignature(),
 	)
 
-	// Avg chain execute time histogram metric
+	// Avg chain executes time histogram metric
 	chainTime = stdPrometheus.NewHistogramVec(
 		stdPrometheus.HistogramOpts{
 			Namespace:   ModuleName,

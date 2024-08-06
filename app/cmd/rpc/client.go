@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -253,7 +253,7 @@ func executeHTTPRequest(payload, url, userAgent string, basicAuth types.BasicAut
 		return "", fmt.Errorf("Expected Code 200 from Request got %v", resp.StatusCode)
 	}
 	// read all bz
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
 	}

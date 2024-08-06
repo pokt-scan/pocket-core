@@ -11,7 +11,6 @@ import (
 	"github.com/puzpuzpuz/xsync"
 	"github.com/xeipuuv/gojsonschema"
 	"io"
-	"io/ioutil"
 	log2 "log"
 	"net/http"
 	"os"
@@ -29,7 +28,7 @@ var (
 	ChainNameMap = xsync.NewMapOf[string]()
 )
 
-// getChainsFilePath - return chains file path resolved by config.json
+// getChainsFilePath - return chains file a path resolved by config.json
 func getChainsFilePath() string {
 	return app.GlobalMeshConfig.DataDir + app.FS + app.GlobalMeshConfig.ChainsName
 }
@@ -69,7 +68,7 @@ func loadRemoteChainsNameMap() ([]byte, error) {
 	}(resp.Body)
 
 	// read the body just to allow http 1.x be able to reuse the connection
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		e := errors.New(fmt.Sprintf("Couldn't parse response body. Error: %s", CleanError(err.Error())))
 		return []byte{}, e
@@ -237,7 +236,7 @@ func loadHostedChains() *pocketTypes.HostedBlockchains {
 	if err != nil {
 		log2.Fatal(app.NewInvalidChainsError(err))
 	}
-	bz, err = ioutil.ReadAll(jsonFile)
+	bz, err = io.ReadAll(jsonFile)
 	if err != nil {
 		log2.Fatal(app.NewInvalidChainsError(err))
 	}
@@ -282,7 +281,7 @@ func reloadChains() {
 	if err != nil {
 		log2.Fatal(app.NewInvalidChainsError(err))
 	}
-	bz, err = ioutil.ReadAll(jsonFile)
+	bz, err = io.ReadAll(jsonFile)
 	if err != nil {
 		log2.Fatal(app.NewInvalidChainsError(err))
 	}
@@ -312,7 +311,7 @@ func reloadChains() {
 	logger.Debug("chains reload process done")
 }
 
-// initHotReload - initialize keys and chains file change detection
+// initHotReload - initialize keys and chain file change detection
 func initChainsHotReload() {
 	if app.GlobalMeshConfig.ChainsHotReloadInterval <= 0 {
 		logger.Info("skipping hot reload due to chains_hot_reload_interval is less or equal to 0")
@@ -417,7 +416,7 @@ func ExecuteBlockchainHTTPRequest(payload pocketTypes.Payload, chain pocketTypes
 	)
 
 	// read all bz
-	body, e4 := ioutil.ReadAll(resp.Body)
+	body, e4 := io.ReadAll(resp.Body)
 	if e4 != nil {
 		logger.Error("unable to process blockchain response payload ", " error ", CleanError(e4.Error()))
 		return "", errors.New("unable to process blockchain response payload"), 500
@@ -427,12 +426,14 @@ func ExecuteBlockchainHTTPRequest(payload pocketTypes.Payload, chain pocketTypes
 		body = []byte(sortJSONResponse(string(body)))
 	}
 
+	strResp := string(body)
+
 	if app.GlobalMeshConfig.LogChainRequest {
 		logStr = logStr + " " + fmt.Sprintf("REQ=%s", data)
 	}
 
 	if app.GlobalMeshConfig.LogChainResponse {
-		logStr = logStr + " " + fmt.Sprintf("RES=%s", string(body))
+		logStr = logStr + " " + fmt.Sprintf("RES=%s", strResp)
 	}
 
 	if resp.StatusCode >= 400 {
@@ -441,7 +442,7 @@ func ExecuteBlockchainHTTPRequest(payload pocketTypes.Payload, chain pocketTypes
 		logger.Debug(logStr)
 	}
 
-	return string(body), nil, resp.StatusCode
+	return strResp, nil, resp.StatusCode
 }
 
 // GetChains - return current chains list.

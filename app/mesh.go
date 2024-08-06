@@ -3,7 +3,7 @@ package app
 import (
 	"encoding/json"
 	sdk "github.com/pokt-network/pocket-core/types"
-	"io/ioutil"
+	"io"
 	log2 "log"
 	"os"
 )
@@ -203,7 +203,7 @@ func InitMeshConfig(datadir string) {
 		if err != nil {
 			log2.Fatalf("cannot open config json file: " + err.Error())
 		}
-		b, err := ioutil.ReadAll(jsonFile)
+		b, err := io.ReadAll(jsonFile)
 		if err != nil {
 			log2.Fatalf("cannot read config file: " + err.Error())
 		}

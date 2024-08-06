@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/akrylysov/pogreb"
 	"github.com/hashicorp/go-retryablehttp"
@@ -110,14 +111,39 @@ func retryRelaysPolicy(ctx context.Context, resp *http.Response, err error) (boo
 		}
 
 		result := RPCRelayResponse{}
-		err = json.NewDecoder(resp.Body).Decode(&result)
-
-		if err != nil {
+		body, e1 := io.ReadAll(resp.Body)
+		if e1 != nil {
 			logger.Error(
 				fmt.Sprintf(
-					"error decoding servicer %s relay response: %s",
+					"error reading body from servicer=%s error=%s body=%s",
 					servicerAddress,
-					CleanError(err.Error()),
+					CleanError(e1.Error()),
+					string(body),
+				),
+			)
+			return true, e1
+		}
+
+		e2 := json.Unmarshal(body, &result)
+		if e2 != nil {
+			logger.Error(
+				fmt.Sprintf(
+					"error decoding body from servicer=%s error=%s body=%s",
+					servicerAddress,
+					CleanError(e2.Error()),
+					string(body),
+				),
+			)
+			return true, e2
+		}
+
+		if result.Error == nil {
+			// let's try again and log this
+			logger.Error(
+				fmt.Sprintf(
+					"response is a json but does not contains the right keys servicer=%s body=%s",
+					servicerAddress,
+					string(body),
 				),
 			)
 			return true, err
@@ -239,7 +265,7 @@ func initCache() {
 	it := relaysCacheDb.Items()
 	for {
 		key, val, err := it.Next()
-		if err == pogreb.ErrIterationDone {
+		if errors.Is(err, pogreb.ErrIterationDone) {
 			break
 		}
 		if err != nil {
