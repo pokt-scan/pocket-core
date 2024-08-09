@@ -140,6 +140,11 @@ func notifyServicer(r *pocketTypes.Relay) {
 
 	// Safety measure to not ask for an app session within range
 	if !ns.ServicerNode.Node.CanHandleRelayWithinTolerance(r.Proof.SessionBlockHeight) {
+		// invalidate session with code 90
+		ns.IsValid = false
+		ns.Error = NewSdkErrorFromPocketSdkError(pocketTypes.NewSealedEvidenceError(ModuleName))
+		// here we are late to notify servicer about the work done, so this session needs to be invalidated, to avoid
+		// new relays and prevent all the code till here on notify
 		LogRelay(r, fmt.Sprintf(
 			"notify - unable to delivery because relay session height is not within tolerance of fullNode session_height=%d",
 			ns.ServicerNode.Node.GetLatestSessionBlockHeight(),
