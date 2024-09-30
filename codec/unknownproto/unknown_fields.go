@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/pokt-network/pocket-core/codec/types"
-	"io/ioutil"
+	"io"
 	"reflect"
 	"sync"
 
@@ -327,7 +327,7 @@ func extractFileDescMessageDesc(desc descriptorIface) (*descriptor.FileDescripto
 	if err != nil {
 		return nil, nil, err
 	}
-	protoBlob, err := ioutil.ReadAll(gzr)
+	protoBlob, err := io.ReadAll(gzr)
 	if err != nil {
 		return nil, nil, err
 	}

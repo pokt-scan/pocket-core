@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/pokt-network/pocket-core/app"
 	sdk "github.com/pokt-network/pocket-core/types"
-	"io/ioutil"
+	"io"
 	log2 "log"
 	"os"
 )
@@ -27,7 +27,7 @@ func getAuthTokenFromFile(path string) sdk.AuthToken {
 		if err != nil {
 			log2.Fatalf("cannot open auth token json file: " + CleanError(err.Error()))
 		}
-		b, err := ioutil.ReadAll(jsonFile)
+		b, err := io.ReadAll(jsonFile)
 		if err != nil {
 			log2.Fatalf("cannot read auth token json file: " + CleanError(err.Error()))
 		}

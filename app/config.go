@@ -154,7 +154,7 @@ func InitConfig(datadir, tmNode, persistentPeers, seeds, remoteCLIURL string) {
 		if err != nil {
 			log2.Fatalf("cannot open config json file: " + err.Error())
 		}
-		b, err := ioutil.ReadAll(jsonFile)
+		b, err := io.ReadAll(jsonFile)
 		if err != nil {
 			log2.Fatalf("cannot read config file: " + err.Error())
 		}
@@ -673,7 +673,7 @@ func HotReloadChains(chains *types.HostedBlockchains) {
 			if err != nil {
 				log2.Fatal(NewInvalidChainsError(err))
 			}
-			bz, err = ioutil.ReadAll(jsonFile)
+			bz, err = io.ReadAll(jsonFile)
 			if err != nil {
 				log2.Fatal(NewInvalidChainsError(err))
 			}
@@ -723,7 +723,7 @@ func NewHostedChains(generate bool) *types.HostedBlockchains {
 	if err != nil {
 		log2.Fatal(NewInvalidChainsError(err))
 	}
-	bz, err = ioutil.ReadAll(jsonFile)
+	bz, err = io.ReadAll(jsonFile)
 	if err != nil {
 		log2.Fatal(NewInvalidChainsError(err))
 	}
@@ -1142,7 +1142,7 @@ func GetAuthTokenFromFile() sdk.AuthToken {
 		if err != nil {
 			log2.Fatalf("cannot open auth token json file: " + err.Error())
 		}
-		b, err := ioutil.ReadAll(jsonFile)
+		b, err := io.ReadAll(jsonFile)
 		if err != nil {
 			log2.Fatalf("cannot read auth token json file: " + err.Error())
 		}

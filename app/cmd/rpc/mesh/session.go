@@ -14,7 +14,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/willf/bloom"
 	"io"
-	"io/ioutil"
 	log2 "log"
 	"net/http"
 	"time"
@@ -318,7 +317,7 @@ func (ns *NodeSession) GetDispatch() (result *RPCSessionResult, statusCode int, 
 	}(resp.Body)
 
 	// read the body just to allow http 1.x be able to reuse the connection
-	body, e4 := ioutil.ReadAll(resp.Body)
+	body, e4 := io.ReadAll(resp.Body)
 
 	if e4 != nil {
 		statusCode = ReadAllBodyError // override this to allow caller know when the error was
@@ -449,7 +448,10 @@ func (ss *SessionStorage) InvalidateNodeSession(relay *pocketTypes.Relay, e *Sdk
 		))
 		return NewSdkErrorFromPocketSdkError(sdk.ErrInternal(CleanError(e1.Error())))
 	} else {
-		ns.Log("invalidating session", LogLvlInfo)
+		ns.Log(
+			fmt.Sprintf("invalidating session code=%d codespace=%s message=%s", e.Code, e.Codespace, e.Error),
+			LogLvlInfo,
+		)
 		// queue and queried set to avoid requeue and understand we are invalidating the session even with query it
 		// like if the session is too old or too far in the future.
 		ns.Queue = false

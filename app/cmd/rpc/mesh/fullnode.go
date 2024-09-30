@@ -12,8 +12,8 @@ import (
 	"github.com/puzpuzpuz/xsync"
 	"github.com/robfig/cron/v3"
 	"io"
-	"io/ioutil"
 	log2 "log"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -50,11 +50,18 @@ func (node *fullNode) ShouldAssumeOptimisticSession(dispatcherSessionBlockHeight
 }
 
 func (node *fullNode) CanHandleRelayWithinTolerance(dispatcherSessionBlockHeight int64) bool {
+	// Reduce the amount in one to reduce the number of relays rejected by the node due to evidence sealed (code=90)
+	// if the servicer allows 1, mesh will allow 0, so mesh has 1 block to keep notifying servicer about relays on
+	// servicer queue.
+	// The best here is set the Servicer in 2 or 3 so mesh will receive slow session rotation from gateways up to 1 or 2
+	// blocks
+	clientSessionSyncAllowance := math.Max(float64(0), float64(node.ClientSessionSyncAllowance-1))
+
 	return pocketTypes.IsProofSessionHeightWithinTolerance(
 		node.GetLatestSessionBlockHeight(),
 		node.BlocksPerSession,
 		dispatcherSessionBlockHeight,
-		node.ClientSessionSyncAllowance,
+		int64(clientSessionSyncAllowance),
 	)
 }
 
@@ -125,7 +132,7 @@ func (node *fullNode) checkNodeEndpoint(endpoint string) error {
 	}(resp.Body)
 
 	// read the body just to allow http 1.x be able to reuse the connection
-	_, err = ioutil.ReadAll(resp.Body)
+	_, err = io.ReadAll(resp.Body)
 	if err != nil {
 		e := errors.New(fmt.Sprintf("Couldn't parse response body. Error: %s", CleanError(err.Error())))
 		return e
@@ -201,7 +208,7 @@ func (node *fullNode) runCheck() error {
 	}(resp.Body)
 
 	// read the body just to allow http 1.x be able to reuse the connection
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
 		return err
