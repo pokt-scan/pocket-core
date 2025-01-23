@@ -14,7 +14,7 @@ import (
 type servicer struct {
 	PrivateKey crypto.PrivateKey
 	Address    sdk.Address
-	Node       *fullNode
+	Node       *FullNode
 }
 
 // reloadServicers - read key file again and manipulate current state after detect differences (add/remove)
@@ -27,11 +27,11 @@ func reloadServicers() {
 	reloadedNodes := mapset.NewSet[string]()
 	reloadedServicers := mapset.NewSet[string]()
 
-	nodesMap.Range(func(key string, _ *fullNode) bool {
+	nodesMap.Range(func(key string, _ *FullNode) bool {
 		currentNodes.Add(key)
 		return true
 	})
-	nodes.Range(func(key string, _ *fullNode) bool {
+	nodes.Range(func(key string, _ *FullNode) bool {
 		reloadedNodes.Add(key)
 		return true
 	})
@@ -95,7 +95,7 @@ func reloadServicers() {
 		s, _ := servicers.Load(address)
 		servicerMap.Store(address, s)
 		if node, ok := nodesMap.Load(s.Node.URL); ok {
-			// set the already existent fullNode reference instead of the new one.
+			// set the already existent FullNode reference instead of the new one.
 			s.Node = node
 
 			if orphan, ok := orphanServicers.Load(address); ok {

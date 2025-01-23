@@ -29,8 +29,8 @@ func getServicersFilePath() string {
 }
 
 // loadServicersFromFile return a sync.Map of nodes/servicers that could be used to start working or calculate a reload
-func loadServicersFromFile() (nodes *xsync.MapOf[string, *fullNode], servicers *xsync.MapOf[string, *servicer]) {
-	nodes = xsync.NewMapOf[*fullNode]()
+func loadServicersFromFile() (nodes *xsync.MapOf[string, *FullNode], servicers *xsync.MapOf[string, *servicer]) {
+	nodes = xsync.NewMapOf[*FullNode]()
 	servicers = xsync.NewMapOf[*servicer]()
 
 	path := getServicersFilePath()
@@ -67,7 +67,7 @@ func loadServicersFromFile() (nodes *xsync.MapOf[string, *fullNode], servicers *
 			}
 
 			for _, n := range readServicers {
-				var node *fullNode
+				var node *FullNode
 
 				if v, ok := nodes.Load(n.URL); !ok {
 					node = createNode(n.URL, n.Name)
@@ -112,7 +112,7 @@ func loadServicersFromFile() (nodes *xsync.MapOf[string, *fullNode], servicers *
 		}
 
 		for index, n := range readServicers {
-			var node *fullNode
+			var node *FullNode
 
 			if v, ok := nodes.Load(n.ServicerUrl); !ok {
 				node = createNode(n.ServicerUrl, "")
@@ -154,7 +154,7 @@ func loadServicersFromFile() (nodes *xsync.MapOf[string, *fullNode], servicers *
 func loadServicerNodes() (totalNodes, totalServicers int) {
 	nodes, servicers := loadServicersFromFile()
 
-	nodes.Range(func(key string, value *fullNode) bool {
+	nodes.Range(func(key string, value *FullNode) bool {
 		nodesMap.Store(key, value)
 		return true
 	})
