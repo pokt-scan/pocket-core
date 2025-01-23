@@ -59,7 +59,7 @@ func meshNodeRelay(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
 				if re != nil {
 					mesh.GetLogger().Error(fmt.Sprintf("error marshaling relay error=%s", re.Error()))
 				}
-				if re != nil {
+				if rhe != nil {
 					mesh.GetLogger().Error(fmt.Sprintf("error marshaling request.Header error=%s", rhe.Error()))
 				}
 			}
@@ -67,7 +67,7 @@ func meshNodeRelay(w http.ResponseWriter, r *http.Request, ps httprouter.Params)
 
 		response := mesh.RPCRelayResponse{
 			Success:  false,
-			Error:    mesh.NewSdkErrorFromPocketSdkError(sdk.ErrInternal(err.Error())),
+			Error:    mesh.NewSdkErrorFromPocketSdkError(err),
 			Dispatch: dispatch,
 		}
 		j, _ := json.Marshal(response)
@@ -427,16 +427,6 @@ func meshServicerNodeCheck(w http.ResponseWriter, r *http.Request, ps httprouter
 		return
 	}
 
-	if err != nil {
-		response := mesh.RPCSessionResult{
-			Success: false,
-			Error:   mesh.NewSdkErrorFromPocketSdkError(sdk.ErrInternal(err.Error())),
-		}
-		j, _ := json.Marshal(response)
-		WriteJSONResponseWithCode(w, string(j), r.URL.Path, r.Host, 400)
-		return
-	}
-
 	response := mesh.CheckResponse{
 		Success:                    true,
 		Status:                     health,
@@ -462,7 +452,7 @@ func meshServicerNodeCheck(w http.ResponseWriter, r *http.Request, ps httprouter
 				response.WrongServicers = append(response.WrongServicers, address)
 			}
 		} else {
-			// get self node (your validator) from the current state
+			// get self-node (your validator) from the current state
 			node := pocketTypes.GetPocketNode()
 			nodeAddress := node.GetAddress()
 			if nodeAddress.String() != address {

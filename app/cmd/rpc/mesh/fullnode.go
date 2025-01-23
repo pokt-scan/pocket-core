@@ -20,8 +20,8 @@ import (
 	"time"
 )
 
-// fullNode - represent the pocket client instance running that could handle 1 or N addresses (lean)
-type fullNode struct {
+// FullNode - represent the pocket client instance running that could handle 1 or N addresses (lean)
+type FullNode struct {
 	Name                       string
 	URL                        string
 	Servicers                  *xsync.MapOf[string, *servicer]
@@ -33,7 +33,7 @@ type fullNode struct {
 	Crons                      *cron.Cron
 }
 
-func (node *fullNode) ShouldAssumeOptimisticSession(dispatcherSessionBlockHeight int64) bool {
+func (node *FullNode) ShouldAssumeOptimisticSession(dispatcherSessionBlockHeight int64) bool {
 	fullNodeHeight := node.Status.Height
 	blocksPerSession := node.BlocksPerSession
 	servicerNodeSessionBlockHeight := node.GetLatestSessionBlockHeight()
@@ -42,20 +42,15 @@ func (node *fullNode) ShouldAssumeOptimisticSession(dispatcherSessionBlockHeight
 	isDispatcherAhead := dispatcherSessionBlockHeight >= fullNodeHeight
 	// check if not is at the end of his session
 	isFullNodeAtEndOfSession := (fullNodeHeight % blocksPerSession) == 0
-	// check if the difference between fullNode and the relay session height is really close to avoid someone could abuse
+	// check if the difference between FullNode and the relay session height is really close to avoid someone could abuse
 	// of this optimistic approach.
 	isDispatcherWithinTolerance := (dispatcherSessionBlockHeight - servicerNodeSessionBlockHeight) <= blocksPerSession
 
 	return isDispatcherAhead && isFullNodeAtEndOfSession && isDispatcherWithinTolerance
 }
 
-func (node *fullNode) CanHandleRelayWithinTolerance(dispatcherSessionBlockHeight int64) bool {
-	// Reduce the amount in one to reduce the number of relays rejected by the node due to evidence sealed (code=90)
-	// if the servicer allows 1, mesh will allow 0, so mesh has 1 block to keep notifying servicer about relays on
-	// servicer queue.
-	// The best here is set the Servicer in 2 or 3 so mesh will receive slow session rotation from gateways up to 1 or 2
-	// blocks
-	clientSessionSyncAllowance := math.Max(float64(0), float64(node.ClientSessionSyncAllowance-1))
+func (node *FullNode) CanHandleRelayWithinTolerance(dispatcherSessionBlockHeight int64) bool {
+	clientSessionSyncAllowance := math.Max(float64(0), float64(node.ClientSessionSyncAllowance))
 
 	return pocketTypes.IsProofSessionHeightWithinTolerance(
 		node.GetLatestSessionBlockHeight(),
@@ -66,7 +61,7 @@ func (node *fullNode) CanHandleRelayWithinTolerance(dispatcherSessionBlockHeight
 }
 
 // NewWorker - generate a new worker.
-func (node *fullNode) NewWorker() {
+func (node *FullNode) NewWorker() {
 	node.Worker = NewWorkerPool(
 		node.URL,
 		app.GlobalMeshConfig.ServicerWorkerStrategy,
@@ -82,7 +77,7 @@ func (node *fullNode) NewWorker() {
 }
 
 // start - start worker and cron jobs
-func (node *fullNode) start() {
+func (node *FullNode) start() {
 	logger.Debug(fmt.Sprintf("starting node %s with %d servicers", node.URL, node.Servicers.Size()))
 	node.Crons.Start()
 	node.NewWorker()
@@ -90,7 +85,7 @@ func (node *fullNode) start() {
 }
 
 // stop - stop worker and crons jobs from node
-func (node *fullNode) stop() {
+func (node *FullNode) stop() {
 	logger.Debug(fmt.Sprintf("stopping worker pool of node %s", node.URL))
 	node.Worker.Stop()
 	logger.Debug(fmt.Sprintf("worker pool of node %s stopped!", node.URL))
@@ -105,20 +100,24 @@ func (node *fullNode) stop() {
 }
 
 // checkNodeEndpoint - check node endpoint
-func (node *fullNode) checkNodeEndpoint(endpoint string) error {
+func (node *FullNode) checkNodeEndpoint(endpoint string) error {
 	requestURL := fmt.Sprintf(
 		"%s%s?verify=true",
 		node.URL,
 		endpoint,
 	)
 	req, err := http.NewRequest("POST", requestURL, nil)
+	if err != nil {
+		return err
+	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(AuthorizationHeader, servicerAuthToken.Value)
 	if app.GlobalMeshConfig.UserAgent != "" {
 		req.Header.Set("User-Agent", app.GlobalMeshConfig.UserAgent)
 	}
-	resp, err := servicerClient.Do(req)
 
+	resp, err := servicerClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -153,7 +152,7 @@ func (node *fullNode) checkNodeEndpoint(endpoint string) error {
 }
 
 // runCheck - check that node is able to work as expected
-func (node *fullNode) runCheck() error {
+func (node *FullNode) runCheck() error {
 	if node.Servicers.Size() == 0 {
 		return errors.New(fmt.Sprintf("node %s has 0 servicers load.", node.URL))
 	}
@@ -186,10 +185,11 @@ func (node *fullNode) runCheck() error {
 		ServicerCheckEndpoint,
 	)
 	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(jsonData))
-	req.Header.Set(AuthorizationHeader, servicerAuthToken.Value)
 	if err != nil {
 		return err
 	}
+
+	req.Header.Set(AuthorizationHeader, servicerAuthToken.Value)
 
 	if app.GlobalMeshConfig.UserAgent != "" {
 		req.Header.Set("User-Agent", app.GlobalMeshConfig.UserAgent)
@@ -246,7 +246,7 @@ func (node *fullNode) runCheck() error {
 }
 
 // scheduleNodeChecks - schedule a node heal pooling
-func (node *fullNode) scheduleNodeChecks() {
+func (node *FullNode) scheduleNodeChecks() {
 	_, err := node.Crons.AddFunc(fmt.Sprintf("@every %ds", app.GlobalMeshConfig.NodeCheckInterval), func() {
 		e := node.runCheck()
 		if e != nil {
@@ -265,8 +265,8 @@ func (node *fullNode) scheduleNodeChecks() {
 	}
 }
 
-// GetLatestSessionBlockHeight - same as pocket core code, just a reimplementation base on the info return by fullNode check call.
-func (node *fullNode) GetLatestSessionBlockHeight() (sessionBlockHeight int64) {
+// GetLatestSessionBlockHeight - same as pocket core code, just a reimplementation base on the info return by FullNode check call.
+func (node *FullNode) GetLatestSessionBlockHeight() (sessionBlockHeight int64) {
 	// get the latest block height
 	blockHeight := node.Status.Height
 	// get the blocks per session
@@ -281,8 +281,8 @@ func (node *fullNode) GetLatestSessionBlockHeight() (sessionBlockHeight int64) {
 	return
 }
 
-// createNode - returns a fullNode instance
-func createNode(urlStr, name string) *fullNode {
+// createNode - returns a FullNode instance
+func createNode(urlStr, name string) *FullNode {
 	nodeCronJobsWorker := cron.New()
 
 	if name == "" {
@@ -297,7 +297,7 @@ func createNode(urlStr, name string) *fullNode {
 
 	logger.Debug(fmt.Sprintf("new node name=%s url=%s", name, urlStr))
 
-	node := &fullNode{
+	node := &FullNode{
 		Name:      name,
 		URL:       urlStr,
 		Servicers: xsync.NewMapOf[*servicer](),
@@ -330,7 +330,7 @@ func connectivityChecks(onlyFor mapset.Set[string]) {
 	endpoints := []string{ServicerRelayEndpoint, ServicerSessionEndpoint, ServicerCheckEndpoint}
 
 	// check health for all the servicer nodes before start.
-	nodesMap.Range(func(key string, node *fullNode) bool {
+	nodesMap.Range(func(key string, node *FullNode) bool {
 		// run this check only if something is sent, otherwise (like on first start) it will run for all the nodes.
 		if onlyFor.Cardinality() > 0 && !onlyFor.Contains(key) {
 			// skip node because
@@ -370,7 +370,7 @@ func connectivityChecks(onlyFor mapset.Set[string]) {
 		pond.Strategy(pond.Eager()),
 	)
 
-	nodesMap.Range(func(key string, node *fullNode) bool {
+	nodesMap.Range(func(key string, node *FullNode) bool {
 		// it will not kill the process because sometimes there is errors on the node side that are solved without
 		// need to restart mesh client, like routing one.
 		firstCheckWorker.Submit(func() {

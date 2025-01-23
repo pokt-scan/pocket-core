@@ -18,7 +18,6 @@ RelaySessionBlockHeight = 9
 servicerNodeSessionBlockHeight = 5
 -> return true (node running behind)
 
-
 RelaySessionBlockHeight = 10
 servicerNodeSessionBlockHeight = 5
 -> return false - (node running super behind) or do we want to allow for 2 blocks tolerance
@@ -34,7 +33,7 @@ servicerNodeSessionBlockHeight = 9
 func TestFullNode_ShouldAssumeOptimisticSession(t *testing.T) {
 	type args struct {
 		relay        *pocketTypes.Relay
-		servicerNode *fullNode
+		servicerNode *FullNode
 	}
 	tests := []struct {
 		name string
@@ -51,7 +50,7 @@ func TestFullNode_ShouldAssumeOptimisticSession(t *testing.T) {
 						SessionBlockHeight: 9,
 					},
 				},
-				servicerNode: &fullNode{
+				servicerNode: &FullNode{
 					Status: &app.HealthResponse{
 						Height: 8,
 					},
@@ -69,7 +68,7 @@ func TestFullNode_ShouldAssumeOptimisticSession(t *testing.T) {
 						SessionBlockHeight: 9,
 					},
 				},
-				servicerNode: &fullNode{
+				servicerNode: &FullNode{
 					Status: &app.HealthResponse{
 						Height: 5,
 					},
@@ -86,7 +85,7 @@ func TestFullNode_ShouldAssumeOptimisticSession(t *testing.T) {
 						SessionBlockHeight: 13,
 					},
 				},
-				servicerNode: &fullNode{
+				servicerNode: &FullNode{
 					Status: &app.HealthResponse{
 						Height: 5,
 					},
@@ -104,7 +103,7 @@ func TestFullNode_ShouldAssumeOptimisticSession(t *testing.T) {
 						SessionBlockHeight: 201,
 					},
 				},
-				servicerNode: &fullNode{
+				servicerNode: &FullNode{
 					Status: &app.HealthResponse{
 						Height: 5,
 					},

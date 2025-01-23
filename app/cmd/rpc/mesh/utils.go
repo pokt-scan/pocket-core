@@ -37,7 +37,7 @@ func IsRetryableRelayCode(code sdk.CodeType) bool {
 }
 
 // GetRandomNode - return a random servicer object from the list load at the start
-func GetRandomNode() *fullNode {
+func GetRandomNode() *FullNode {
 	mutex.Lock()
 	address := servicerList[rand.Intn(len(servicerList))]
 	mutex.Unlock()
@@ -59,7 +59,7 @@ func GetAddressFromPubKeyAsString(pubKey string) (string, error) {
 }
 
 // GetNodeFromAddress - lookup a node from a servicer address
-func GetNodeFromAddress(address string) *fullNode {
+func GetNodeFromAddress(address string) *FullNode {
 	s, ok := servicerMap.Load(address)
 
 	if !ok {
@@ -110,7 +110,7 @@ func NewSdkErrorFromPocketSdkError(e sdk.Error) *SdkErrorResponse {
 
 // NewPocketSdkErrorFromSdkError - return a pocketcore sdk.Error from a mesh node sdkErrorResponse
 func NewPocketSdkErrorFromSdkError(e *SdkErrorResponse) sdk.Error {
-	return sdk.NewError(e.Codespace, e.Code, errors.New(e.Error).Error())
+	return sdk.NewError(e.Codespace, e.Code, e.Error)
 }
 
 // ServicerIsSupported - use on pocket node side to verify if the address is handled by the running process.

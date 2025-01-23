@@ -146,7 +146,7 @@ func notifyServicer(r *pocketTypes.Relay) {
 		// here we are late to notify servicer about the work done, so this session needs to be invalidated, to avoid
 		// new relays and prevent all the code till here on notify
 		LogRelay(r, fmt.Sprintf(
-			"notify - unable to delivery because relay session height is not within tolerance of fullNode session_height=%d",
+			"notify - unable to delivery because relay session height is not within tolerance of FullNode session_height=%d",
 			ns.ServicerNode.Node.GetLatestSessionBlockHeight(),
 		), LogLvlError)
 		ns.ServicerNode.Node.MetricsWorker.AddServiceMetricErrorFor(
@@ -165,7 +165,7 @@ func notifyServicer(r *pocketTypes.Relay) {
 	)
 	req, e3 := retryablehttp.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(jsonData))
 	if e3 != nil {
-		LogRelay(r, fmt.Sprintf("notify - error=%s formatting url to call fullNode of servicer", e3.Error()), LogLvlError)
+		LogRelay(r, fmt.Sprintf("notify - error=%s formatting url to call FullNode of servicer", e3.Error()), LogLvlError)
 		ns.ServicerNode.Node.MetricsWorker.AddServiceMetricErrorFor(
 			r.Proof.Blockchain, &ns.ServicerNode.Address,
 			true, NotifyRequestErrorType, "500",
@@ -181,7 +181,7 @@ func notifyServicer(r *pocketTypes.Relay) {
 	resp, e4 := relaysClient.Do(req)
 
 	if e4 != nil {
-		LogRelay(r, fmt.Sprintf("notify - error=%s dispatching relay to fullNode", CleanError(e4.Error())), LogLvlError)
+		LogRelay(r, fmt.Sprintf("notify - error=%s dispatching relay to FullNode", CleanError(e4.Error())), LogLvlError)
 		ns.ServicerNode.Node.MetricsWorker.AddServiceMetricErrorFor(
 			r.Proof.Blockchain, &ns.ServicerNode.Address,
 			true, NotifyRequestErrorType, "500",
@@ -204,7 +204,7 @@ func notifyServicer(r *pocketTypes.Relay) {
 	_, e6 := io.ReadAll(resp.Body)
 	if e6 != nil {
 		LogRelay(r, fmt.Sprintf(
-			"notify - error=%s parsing response from endpoint=%s at fullNode",
+			"notify - error=%s parsing response from endpoint=%s at FullNode",
 			CleanError(e6.Error()), ServicerRelayEndpoint,
 		), LogLvlError)
 		ns.ServicerNode.Node.MetricsWorker.AddServiceMetricErrorFor(
@@ -222,7 +222,7 @@ func notifyServicer(r *pocketTypes.Relay) {
 
 	if !isSuccess {
 		LogRelay(r, fmt.Sprintf(
-			"notify - relay rejected by fullNode with message=%s code=%d codespace=%s",
+			"notify - relay rejected by FullNode with message=%s code=%d codespace=%s",
 			result.Error.Error, result.Error.Code, result.Error.Codespace,
 		), LogLvlError)
 		ns.ServicerNode.Node.MetricsWorker.AddServiceMetricErrorFor(
@@ -231,7 +231,7 @@ func notifyServicer(r *pocketTypes.Relay) {
 		)
 		if result.Error == nil {
 			LogRelay(r, fmt.Sprintf(
-				"EDGE CASE: notify - relay rejected by fullNode without ERROR",
+				"EDGE CASE: notify - relay rejected by FullNode without ERROR",
 			), LogLvlError)
 			requeue = true
 			return
@@ -239,14 +239,6 @@ func notifyServicer(r *pocketTypes.Relay) {
 		evaluateServicerError(r, result.Error)
 	} else {
 		LogRelay(r, "notify - servicer processed relay successfully", LogLvlDebug)
-
-		canHoldMore := ns.CountRelay()
-
-		if !canHoldMore {
-			LogRelay(r, "notify - servicer exhaust relays", LogLvlDebug)
-		} else {
-			LogRelay(r, fmt.Sprintf("notify - servicer has %d remaining relays", ns.RemainingRelays), LogLvlDebug)
-		}
 
 		// track the notification relay time
 		relayDuration := time.Since(relayTimeStart)
@@ -431,29 +423,29 @@ func validate(r *pocketTypes.Relay) (*NodeSession, sdk.Error) {
 }
 
 // HandleRelay - evaluate node status, validate relay payload and call processRelay
-func HandleRelay(r *pocketTypes.Relay) (res *pocketTypes.RelayResponse, dispatch *DispatchResponse, err error) {
+func HandleRelay(r *pocketTypes.Relay) (res *pocketTypes.RelayResponse, dispatch *DispatchResponse, err sdk.Error) {
 	relayTimeStart := time.Now()
 	servicerAddress, e := GetAddressFromPubKeyAsString(r.Proof.ServicerPubKey)
 
 	if e != nil {
-		return nil, nil, errors.New("could not convert servicer hex to public key")
+		return nil, nil, sdk.ErrInternal("Could not convert servicer hex to public key")
 	}
 
 	servicerNode, ok := servicerMap.Load(servicerAddress)
 	if !ok {
-		return nil, nil, errors.New("failed to find correct servicer PK")
+		return nil, nil, sdk.ErrInternal("failed to find correct servicer PK")
 	}
 
 	if servicerNode.Node.Status == nil {
-		return nil, nil, fmt.Errorf("pocket node is currently unavailable")
+		return nil, nil, sdk.ErrInternal("pocket node is currently unavailable")
 	}
 
 	if servicerNode.Node.Status.IsStarting {
-		return nil, nil, fmt.Errorf("pocket node is unable to retrieve synced status from tendermint node, cannot service in this state")
+		return nil, nil, sdk.ErrInternal("pocket node is unable to retrieve synced status from tendermint node, cannot service in this state")
 	}
 
 	if servicerNode.Node.Status.IsCatchingUp {
-		return nil, nil, fmt.Errorf("pocket node is currently syncing to the blockchain, cannot service in this state")
+		return nil, nil, sdk.ErrInternal("pocket node is currently syncing to the blockchain, cannot service in this state")
 	}
 
 	ns, err := validate(r)

@@ -26,7 +26,7 @@ const (
 	ServicerRelayEndpoint   = "/v1/private/mesh/relay"
 	ServicerSessionEndpoint = "/v1/private/mesh/session"
 	ServicerCheckEndpoint   = "/v1/private/mesh/check"
-	AppVersion              = "RC-0.5.1"
+	AppVersion              = "RC-0.5.2"
 )
 
 var (
@@ -38,7 +38,7 @@ var (
 	relaysClient      *retryablehttp.Client
 	relaysCacheDb     *pogreb.DB
 	servicerMap       = xsync.NewMapOf[*servicer]()
-	nodesMap          = xsync.NewMapOf[*fullNode]()
+	nodesMap          = xsync.NewMapOf[*FullNode]()
 	servicerList      []string
 	chains            *pocketTypes.HostedBlockchains
 	meshAuthToken     sdk.AuthToken
@@ -142,7 +142,7 @@ func StopRPC() {
 	// stop accepting new tasks and signal all workers to stop processing new tasks. Tasks being processed by workers
 	// will continue until completion unless the process is terminated.
 	logger.Info("stopping worker pools...")
-	nodesMap.Range(func(key string, node *fullNode) bool {
+	nodesMap.Range(func(key string, node *FullNode) bool {
 		node.stop()
 		return true
 	})

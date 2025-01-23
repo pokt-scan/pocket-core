@@ -114,14 +114,14 @@ type NodeSession struct {
 	ServicerPubKey  string                 // servicer public key
 	ServicerAddress string                 // servicer address
 	BlockHeight     int64                  // session block height
-	Dispatch        *DispatchResponse      // dispatch response from the fullNode
+	Dispatch        *DispatchResponse      // dispatch response from the FullNode
 	Queue           bool                   // flag to know if the async validation of the session is already in queue
 	Queried         bool                   // flag to know if the session was queried to know the validity of it
 	RetryTimes      int                    // how many times the session validation was retried
 	RelayMeta       *pocketTypes.RelayMeta // just a sample of any relay to get the dispatch
 	// servicer related info
 	ServicerNode                *servicer
-	RemainingRelays             int64             // how many relays the servicer can still service - todo: probably will remove and handle the overServiceError from the fullNode
+	RemainingRelays             int64             // how many relays the servicer can still service - todo: probably will remove and handle the overServiceError from the FullNode
 	IsValid                     bool              // if the session is or not valid
 	Error                       *SdkErrorResponse // in case session is not valid anymore, this will be the error to be returned.
 	DuplicateRelayBloomFilter   *bloom.BloomFilter
@@ -286,7 +286,7 @@ func (ns *NodeSession) GetDispatch() (result *RPCSessionResult, statusCode int, 
 		statusCode = NewRequestError
 		e = errors.New(fmt.Sprintf(
 			"error creating check session request app=%s chain=%s blockHeight=%d servicer=%s err=%s",
-			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerAddress, CleanError(e1.Error()),
+			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerAddress, CleanError(e2.Error()),
 		))
 		return
 	}
@@ -302,7 +302,7 @@ func (ns *NodeSession) GetDispatch() (result *RPCSessionResult, statusCode int, 
 		statusCode = ExecuteRequestError
 		e = errors.New(fmt.Sprintf(
 			"error calling check session request app=%s chain=%s blockHeight=%d servicer=%s err=%s",
-			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerAddress, CleanError(e2.Error()),
+			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerAddress, CleanError(e3.Error()),
 		))
 		return
 	}
@@ -323,7 +323,7 @@ func (ns *NodeSession) GetDispatch() (result *RPCSessionResult, statusCode int, 
 		statusCode = ReadAllBodyError // override this to allow caller know when the error was
 		e = errors.New(fmt.Sprintf(
 			"error reading check session response body app=%s chain=%s blockHeight=%d servicer=%s err=%s",
-			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerPubKey, CleanError(e3.Error()),
+			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerPubKey, CleanError(e4.Error()),
 		))
 
 		return
@@ -334,7 +334,7 @@ func (ns *NodeSession) GetDispatch() (result *RPCSessionResult, statusCode int, 
 	if e5 != nil {
 		e = errors.New(fmt.Sprintf(
 			"error unmarshalling check session response to RPCSessionResult app=%s chain=%s blockHeight=%d servicer=%s err=%s",
-			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerAddress, CleanError(e4.Error()),
+			ns.AppPubKey, ns.Chain, ns.BlockHeight, ns.ServicerAddress, CleanError(e5.Error()),
 		))
 		return
 	}
@@ -425,7 +425,7 @@ func (ss *SessionStorage) NewNodeSessionFromRelay(relay *pocketTypes.Relay) (*No
 		RelayMeta:                   &relay.Meta,
 		ServicerNode:                servicerNode,
 		RemainingRelays:             -1,   // means that is unlimited until check it
-		IsValid:                     true, // true until fullNode negate this
+		IsValid:                     true, // true until FullNode negate this
 		Error:                       nil,
 		OptimisticDuplicateRelayMap: xsync.NewMapOf[struct{}](),
 	}, nil
