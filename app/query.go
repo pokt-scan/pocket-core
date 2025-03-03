@@ -441,7 +441,7 @@ func (app PocketCoreApp) QueryParam(height int64, paramkey string) (r SinglePara
 		if err2 != nil {
 			//ignoring this error as content is a json object
 			r.Value = val
-			return r, err
+			return r, err2
 		}
 		r.Value = s
 	}
