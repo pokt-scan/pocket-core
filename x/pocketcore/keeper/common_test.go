@@ -656,7 +656,7 @@ func (_m *Ctx) IsZero() bool {
 	return r0
 }
 
-// IsZero provides a mock function with given fields:
+// IsAfterUpgradeHeight provides a mock function with given fields:
 func (_m *Ctx) IsAfterUpgradeHeight() bool {
 	ret := _m.Called()
 
@@ -670,7 +670,7 @@ func (_m *Ctx) IsAfterUpgradeHeight() bool {
 	return r0
 }
 
-// IsZero provides a mock function with given fields:
+// IsOnUpgradeHeight provides a mock function with given fields:
 func (_m *Ctx) IsOnUpgradeHeight() bool {
 	ret := _m.Called()
 
