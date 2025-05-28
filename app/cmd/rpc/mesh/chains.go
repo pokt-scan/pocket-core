@@ -327,7 +327,7 @@ func initChainsHotReload() {
 }
 
 // ExecuteBlockchainHTTPRequest - run the non-native blockchain http request reusing chains http client.
-func ExecuteBlockchainHTTPRequest(payload pocketTypes.Payload, chain pocketTypes.HostedBlockchain) (string, error, int) {
+func ExecuteBlockchainHTTPRequest(payload pocketTypes.Payload, chain pocketTypes.HostedBlockchain, servicer string) (string, error, int) {
 	data := payload.Data
 	_url := strings.Trim(chain.URL, `/`)
 
@@ -371,6 +371,9 @@ func ExecuteBlockchainHTTPRequest(payload pocketTypes.Payload, chain pocketTypes
 			req.Header.Set(k, v)
 		}
 	}
+
+	req.Header.Set("X-Pocket-Servicer", servicer)
+	req.Header.Set("X-Pocket-Service", chain.ID)
 
 	// some users report lots of EOF due to connections trying to behind reused but net.Http fails to understand it.
 	if app.GlobalMeshConfig.ChainDropConnections {

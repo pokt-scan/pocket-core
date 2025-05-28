@@ -113,7 +113,7 @@ func meshSimulateRelay(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 		),
 	)
 	// do basic http request on the relay
-	res, er, _ := mesh.ExecuteBlockchainHTTPRequest(params.Payload, chain)
+	res, er, _ := mesh.ExecuteBlockchainHTTPRequest(params.Payload, chain, "simulate_relay")
 	if er != nil {
 		WriteErrorResponse(w, 400, er.Error())
 		return

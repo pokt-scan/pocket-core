@@ -280,7 +280,7 @@ func execute(r *pocketTypes.Relay, hostedBlockchains *pocketTypes.HostedBlockcha
 	}
 
 	// do basic http request on the relay
-	res, er, c := ExecuteBlockchainHTTPRequest(r.Payload, chain)
+	res, er, c := ExecuteBlockchainHTTPRequest(r.Payload, chain, address.String())
 	if er != nil {
 		// metric track
 		node.MetricsWorker.AddServiceMetricErrorFor(r.Proof.Blockchain, address, false, ChainStatusType, fmt.Sprintf("%d", code))
